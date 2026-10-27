@@ -73,7 +73,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation, route }) => {
       badgeBg: '#E0F2FE',
       badgeColor: '#0369A1',
       action: () => {
-        Alert.alert('Mark Haziri', 'Opening Daily Attendance Register for Muallimeen & Talaba.');
+        navigation.navigate('AttendanceScreen', { initialTab: 'mark' });
       },
     },
     {
@@ -372,10 +372,14 @@ export const DashboardScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
 
         {/* TODAY'S ATTENDANCE BREAKDOWN */}
-        <View style={styles.departmentCard}>
+        <TouchableOpacity
+          style={styles.departmentCard}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('AttendanceScreen', { initialTab: 'monthly' })}
+        >
           <View style={styles.deptHeaderRow}>
             <Text style={styles.deptHeaderTitle}>Departmental Haziri Pulse</Text>
-            <Text style={styles.deptHeaderDate}>Today</Text>
+            <Text style={styles.deptHeaderDate}>View Monthly Report →</Text>
           </View>
 
           {/* Hifz Dept */}
@@ -410,7 +414,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation, route }) => {
               <View style={[styles.progressBarFill, { width: '100%', backgroundColor: '#D97706' }]} />
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* PRAYER TIMETABLE HORIZONTAL STRIP */}
         <View style={styles.prayerStripContainer}>
@@ -633,7 +637,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 18,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 28) + 10 : 12,
+    paddingTop: Platform.OS === 'android' ? 12 : 8,
     paddingBottom: 12,
     backgroundColor: '#F8FAF9',
     borderBottomWidth: 1,

@@ -11,7 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
@@ -25,6 +25,7 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 32 - 12) / 2;
 
 export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
+  const insets = useSafeAreaInsets();
   const userName = route?.params?.userName || 'Hazrat Maulana Muhtamim Sahib';
 
   // Navigation and active states
@@ -95,10 +96,10 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
             '🟢 Present on Duty Today: 62 / 64 (97%)',
             '🟡 On Approved Leave: 2',
           ],
-          actionTitle: 'View Faculty Roster',
+          actionTitle: 'View Complete Faculty Directory (اساتذہ) 📋',
           action: () => {
             setSelectedCardDetail(null);
-            Alert.alert('Faculty Roster', '64 Faculty members are currently registered in the database.');
+            navigation.navigate('TeachersListScreen');
           },
         });
         break;
@@ -114,10 +115,10 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
             '💬 Last Notice Broadcast: Ramadan Timetable Notice',
             '📩 Unread Guardian Inquiries: 5',
           ],
-          actionTitle: 'Broadcast Notice to Guardians',
+          actionTitle: 'View Guardians Directory (والدین) 👨‍👩‍👦',
           action: () => {
             setSelectedCardDetail(null);
-            Alert.alert('Notice Broadcast', 'Broadcast message module ready for 1,120 verified parents.');
+            navigation.navigate('ParentsListScreen');
           },
         });
         break;
@@ -133,10 +134,10 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
             '⭐ Tajweed & Qiraat: 5 Classes',
             '🌙 Ibtidaiyya (Prep): 3 Classes',
           ],
-          actionTitle: 'View Class Schedules',
+          actionTitle: 'View All Active Classes & Darjat 🏛️',
           action: () => {
             setSelectedCardDetail(null);
-            Alert.alert('Darjaat Schedule', '36 active classes are on schedule today.');
+            navigation.navigate('ClassesListScreen');
           },
         });
         break;
@@ -382,6 +383,55 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
 
         {/* QUICK ADMINISTRATIVE SHORTCUTS */}
         <View style={styles.quickAccessSection}>
+          {/* Card 0: Daily Haziri & Attendance Reports */}
+          <TouchableOpacity
+            style={[styles.adminActionCard, { marginBottom: 10, borderColor: '#86EFAC' }]}
+            activeOpacity={0.8}
+            onPress={() =>
+              navigation.navigate('AttendanceScreen', {
+                role: 'superadmin',
+                readOnly: false,
+              })
+            }
+          >
+            <View style={styles.adminActionLeft}>
+              <View style={[styles.adminActionIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                <Text style={styles.adminActionEmoji}>☑</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminActionTitle}>Daily Haziri, Monthly & Yearly Reports</Text>
+                <Text style={styles.adminActionSub}>
+                  Super Admin full access • Mark attendance, history, monthly & yearly reports
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.adminActionBadge, { backgroundColor: '#059669' }]}>
+              <Text style={[styles.adminActionBadgeText, { color: '#FFFFFF' }]}>Haziri →</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 0B: Teacher Portal & Class Attendance */}
+          <TouchableOpacity
+            style={[styles.adminActionCard, { marginBottom: 10, borderColor: '#FDE68A', backgroundColor: '#FFFBEB' }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('TeacherPortalScreen')}
+          >
+            <View style={styles.adminActionLeft}>
+              <View style={[styles.adminActionIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={styles.adminActionEmoji}>🧑‍🏫</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminActionTitle}>Teacher Portal (Class Haziri & Reports)</Text>
+                <Text style={styles.adminActionSub}>
+                  Enter class as teacher • Mark class attendance & check student monthly/yearly reports
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.adminActionBadge, { backgroundColor: '#D97706' }]}>
+              <Text style={[styles.adminActionBadgeText, { color: '#FFFFFF' }]}>Teacher →</Text>
+            </View>
+          </TouchableOpacity>
+
           {/* Card 1: Students Directory with Darjat Filter */}
           <TouchableOpacity
             style={[styles.adminActionCard, { marginBottom: 10 }]}
@@ -394,7 +444,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.adminActionTitle}>Talaba Directory & Darjaat</Text>
-                <Text style={styles.adminActionSub}>View all students, filter by Darja & enroll new</Text>
+                <Text style={styles.adminActionSub}>View all students, filter by Darja & check roster</Text>
               </View>
             </View>
             <View style={[styles.adminActionBadge, { backgroundColor: '#0F4433' }]}>
@@ -402,7 +452,87 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
             </View>
           </TouchableOpacity>
 
-          {/* Card 2: Pending Dakhla Approvals */}
+          {/* Card 2: Faculty / Teachers Management */}
+          <TouchableOpacity
+            style={[styles.adminActionCard, { marginBottom: 10 }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('TeachersListScreen')}
+          >
+            <View style={styles.adminActionLeft}>
+              <View style={[styles.adminActionIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={styles.adminActionEmoji}>👳‍♂️</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminActionTitle}>Asateza-e-Kiram (Faculty)</Text>
+                <Text style={styles.adminActionSub}>Faculty members, duties, contact & add new</Text>
+              </View>
+            </View>
+            <View style={[styles.adminActionBadge, { backgroundColor: '#B45309' }]}>
+              <Text style={[styles.adminActionBadgeText, { color: '#FDE68A' }]}>Faculty →</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 3: Classes & Active Sections */}
+          <TouchableOpacity
+            style={[styles.adminActionCard, { marginBottom: 10 }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('ClassesListScreen')}
+          >
+            <View style={styles.adminActionLeft}>
+              <View style={[styles.adminActionIconCircle, { backgroundColor: '#FFEDD5' }]}>
+                <Text style={styles.adminActionEmoji}>🏛️</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminActionTitle}>Darjaat & Active Classes</Text>
+                <Text style={styles.adminActionSub}>Classrooms, batches, room numbers & assigned ustads</Text>
+              </View>
+            </View>
+            <View style={[styles.adminActionBadge, { backgroundColor: '#C2410C' }]}>
+              <Text style={[styles.adminActionBadgeText, { color: '#FED7AA' }]}>Classes →</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 4: Parents & Guardians */}
+          <TouchableOpacity
+            style={[styles.adminActionCard, { marginBottom: 10 }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('ParentsListScreen')}
+          >
+            <View style={styles.adminActionLeft}>
+              <View style={[styles.adminActionIconCircle, { backgroundColor: '#D1FAE5' }]}>
+                <Text style={styles.adminActionEmoji}>👨‍👩‍👦</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminActionTitle}>Walidain & Guardians Directory</Text>
+                <Text style={styles.adminActionSub}>Verified contacts, notices & parent portal</Text>
+              </View>
+            </View>
+            <View style={[styles.adminActionBadge, { backgroundColor: '#047857' }]}>
+              <Text style={[styles.adminActionBadgeText, { color: '#A7F3D0' }]}>Parents →</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 5: New Admission */}
+          <TouchableOpacity
+            style={[styles.adminActionCard, { marginBottom: 10 }]}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('StudentAddScreen')}
+          >
+            <View style={styles.adminActionLeft}>
+              <View style={[styles.adminActionIconCircle, { backgroundColor: '#E0E7FF' }]}>
+                <Text style={styles.adminActionEmoji}>📝</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminActionTitle}>New Talib-e-Ilm Admission</Text>
+                <Text style={styles.adminActionSub}>Direct enrollment with class & guardian creation</Text>
+              </View>
+            </View>
+            <View style={[styles.adminActionBadge, { backgroundColor: '#3730A3' }]}>
+              <Text style={[styles.adminActionBadgeText, { color: '#C7D2FE' }]}>Enroll +</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 6: Pending Dakhla Approvals */}
           <TouchableOpacity
             style={styles.adminActionCard}
             activeOpacity={0.8}
@@ -414,7 +544,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.adminActionTitle}>Pending Dakhla Approvals</Text>
-                <Text style={styles.adminActionSub}>18 New Applications waiting for Muhtamim sign-off</Text>
+                <Text style={styles.adminActionSub}>Online registration requests awaiting sign-off</Text>
               </View>
             </View>
             <View style={styles.adminActionBadge}>
@@ -423,8 +553,8 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
 
-        {/* BOTTOM SPACING FOR FLOATING TAB BAR */}
-        <View style={{ height: 90 }} />
+        {/* BOTTOM SPACING */}
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       {/* FIXED BOTTOM NAVIGATION BAR */}
@@ -494,26 +624,23 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
 
-        {/* 3. Operations Tab */}
+        {/* 3. Haziri / Operations Tab */}
         <TouchableOpacity
           style={styles.tabItem}
           activeOpacity={0.7}
           onPress={() => {
             setActiveTab('Operations');
-            Alert.alert(
-              'Operations Module 👥',
-              'Attendance monitoring, Staff shifts, and Campus logistics.'
-            );
+            navigation.navigate('AttendanceScreen');
           }}
         >
-          <Text style={styles.tabEmojiIcon}>👥</Text>
+          <Text style={styles.tabEmojiIcon}>☑</Text>
           <Text
             style={[
               styles.tabLabel,
               activeTab === 'Operations' && styles.tabLabelActive,
             ]}
           >
-            Operations
+            Haziri
           </Text>
         </TouchableOpacity>
 
@@ -559,9 +686,6 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
             More
           </Text>
         </TouchableOpacity>
-
-        {/* Native Home Indicator Bar */}
-        <View style={styles.homeIndicatorBar} />
       </View>
 
       {/* DETAIL MODAL (Card Click) */}
@@ -624,7 +748,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
         onRequestClose={() => setInstitutionModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.bottomSheetCard}>
+          <View style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 12, 22) }]}>
             <Text style={styles.sheetTitle}>Select Markazi Institution</Text>
             <Text style={styles.sheetSubtitle}>
               Switch institution console for Muhtamim Sahib
@@ -668,7 +792,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
         onRequestClose={() => setBranchModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.bottomSheetCard}>
+          <View style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 12, 22) }]}>
             <Text style={styles.sheetTitle}>Active Jurisdiction Branches</Text>
             <Text style={styles.sheetSubtitle}>
               Select branch jurisdiction to filter statistics
@@ -716,7 +840,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
         onRequestClose={() => setNotificationModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.bottomSheetCard}>
+          <View style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 12, 22) }]}>
             <Text style={styles.sheetTitle}>Markazi Notifications 🔔</Text>
             <Text style={styles.sheetSubtitle}>
               Priority alerts for Hazrat Maulana Muhtamim Sahib
@@ -768,7 +892,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
         onRequestClose={() => setProfileModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.bottomSheetCard}>
+          <View style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 12, 22) }]}>
             <View style={styles.profileSheetHeader}>
               <View style={styles.profileSheetAvatar}>
                 <Text style={styles.profileSheetAvatarIcon}>👤</Text>
@@ -1221,18 +1345,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   bottomNavContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 68,
+    height: 64,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#EBF1EC',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingBottom: 8,
+    paddingVertical: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.05,

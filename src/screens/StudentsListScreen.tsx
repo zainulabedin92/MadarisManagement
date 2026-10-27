@@ -15,7 +15,7 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList, Student } from '../types';
@@ -164,6 +164,7 @@ const INITIAL_DEMO_STUDENTS: Student[] = [
 ];
 
 export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
+  const insets = useSafeAreaInsets();
   const initialDarja = route?.params?.filterDarja || 'All Darjat';
 
   // Filters & Search
@@ -292,7 +293,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
     setDetailModalVisible(true);
   };
 
-  const handleCallGuardian = (mobile: string) => {
+  const handleCallGuardian = (mobile?: string) => {
     if (!mobile) return;
     Linking.openURL(`tel:${mobile}`).catch(() => {
       Alert.alert('Call Failed', `Cannot dial ${mobile} on this device.`);
@@ -533,7 +534,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
 
       {/* Floating Action Button (FAB) to Add New Student */}
       <TouchableOpacity
-        style={styles.fabBtn}
+        style={[styles.fabBtn, { bottom: Math.max(insets.bottom, 8) + 16 }]}
         activeOpacity={0.88}
         onPress={() => navigation.navigate('RegisterPage')}
       >
@@ -551,7 +552,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
         onRequestClose={() => setDetailModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
@@ -656,9 +657,58 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
               </View>
             </ScrollView>
 
+            {/* Attendance Report Quick Buttons */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 1, marginTop: 0, backgroundColor: '#059669' }]}
+                activeOpacity={0.85}
+                onPress={() => {
+                  const st = selectedStudent;
+                  setDetailModalVisible(false);
+                  if (st) {
+                    const stId = st._id || st.id || st.cnic;
+                    const stName = `${st.firstName || ''} ${st.lastName || ''}`.trim() || 'Student';
+                    navigation.navigate('AttendanceScreen', {
+                      initialTab: 'monthly',
+                      filterDarja: st.enrollmentProgram || 'All',
+                      studentId: stId,
+                      studentName: stName,
+                      role: 'superadmin',
+                      readOnly: false,
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.modalActionBtnText}>📊 Monthly Report</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 1, marginTop: 0, backgroundColor: '#1E40AF' }]}
+                activeOpacity={0.85}
+                onPress={() => {
+                  const st = selectedStudent;
+                  setDetailModalVisible(false);
+                  if (st) {
+                    const stId = st._id || st.id || st.cnic;
+                    const stName = `${st.firstName || ''} ${st.lastName || ''}`.trim() || 'Student';
+                    navigation.navigate('AttendanceScreen', {
+                      initialTab: 'yearly',
+                      filterDarja: st.enrollmentProgram || 'All',
+                      studentId: stId,
+                      studentName: stName,
+                      role: 'superadmin',
+                      readOnly: false,
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.modalActionBtnText}>📆 Yearly Report</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Modal Bottom Action Button */}
             <TouchableOpacity
-              style={styles.modalActionBtn}
+              style={[styles.modalActionBtn, { marginTop: 8 }]}
               activeOpacity={0.85}
               onPress={() => setDetailModalVisible(false)}
             >

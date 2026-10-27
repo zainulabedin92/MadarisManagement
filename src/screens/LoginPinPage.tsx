@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
@@ -12,6 +11,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { CustomInput } from '../components/CustomInput';
@@ -202,7 +202,7 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -341,6 +341,52 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
                   </TouchableOpacity>
                 </View>
               </View>
+            </View>
+
+            {/* Dedicated Portals Section */}
+            <View style={styles.portalsContainer}>
+              <TouchableOpacity
+                style={[styles.portalCardBtn, { marginBottom: 10, borderColor: '#fde68a', backgroundColor: '#fffbeb' }]}
+                onPress={() => navigation.navigate('TeacherPortalScreen')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.portalCardIcon}>👳‍♂️</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.portalCardTitle}>Teacher Portal (اساتذہ پورٹل)</Text>
+                  <Text style={styles.portalCardSub}>
+                    Enter class, mark daily attendance & check student monthly/yearly reports
+                  </Text>
+                </View>
+                <Text style={styles.portalCardArrow}>→</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.portalCardBtn}
+                onPress={() => navigation.navigate('ParentPortalScreen')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.portalCardIcon}>👨‍👩‍👦</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.portalCardTitle}>Parent Portal (والدین پورٹل)</Text>
+                  <Text style={styles.portalCardSub}>
+                    View child enrollment, monthly & yearly attendance reports
+                  </Text>
+                </View>
+                <Text style={styles.portalCardArrow}>→</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.portalCardBtn, { marginTop: 10, borderColor: '#a7f3d0' }]}
+                onPress={() => navigation.navigate('RegisterPage')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.portalCardIcon}>📝</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.portalCardTitle}>New Student Registration (نیا داخلہ)</Text>
+                  <Text style={styles.portalCardSub}>Online admission application form</Text>
+                </View>
+                <Text style={styles.portalCardArrow}>→</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -785,5 +831,39 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  portalsContainer: {
+    marginTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 16,
+  },
+  portalCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    padding: 12,
+    elevation: 1,
+  },
+  portalCardIcon: {
+    fontSize: 24,
+  },
+  portalCardTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#0f172a',
+  },
+  portalCardSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  portalCardArrow: {
+    fontSize: 16,
+    color: '#059669',
+    fontWeight: 'bold',
   },
 });
