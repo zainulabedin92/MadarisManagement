@@ -62,16 +62,6 @@ export const ClassAddScreen: React.FC<Props> = ({ navigation }) => {
     loadTeachers();
   }, []);
 
-  const handleDemoFill = () => {
-    const randomBatch = String.fromCharCode(65 + Math.floor(Math.random() * 5));
-    const randomRoom = Math.floor(100 + Math.random() * 200);
-    setName(`Hifz-ul-Quran - Batch ${randomBatch}`);
-    setSection(randomBatch);
-    setRoomNumber(`${randomRoom}`);
-    setAcademicYear('2026-2027');
-    setStatus('Active');
-  };
-
   const handleSubmit = async () => {
     if (!name.trim()) {
       Alert.alert('Required Field', 'Please enter class or darja name.');
@@ -122,10 +112,6 @@ export const ClassAddScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.headerTitle}>Create New Class</Text>
           <Text style={styles.headerSubtitle}>درجہ / شعبہ کی نئی تشکیل</Text>
         </View>
-
-        <TouchableOpacity style={styles.prefillBtn} onPress={handleDemoFill}>
-          <Text style={styles.prefillBtnText}>⚡ Demo Fill</Text>
-        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView

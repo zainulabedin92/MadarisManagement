@@ -1,5 +1,7 @@
-import React from 'react';
-import { StatusBar, useColorScheme } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, StatusBar, Text, View, useColorScheme } from 'react-native';
+import { apiService } from './src/services/api';
+import { syncService, SyncState } from './src/services/syncService';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -22,12 +24,38 @@ import { AttendanceScreen } from './src/screens/AttendanceScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+function SyncBanner(): React.JSX.Element | null {
+  const [s, setS] = useState<SyncState>(syncService.getState());
+  useEffect(() => syncService.subscribe(setS), []);
+  if (s.pending === 0 && !s.syncing) return null;
+  return (
+    <View style={{ backgroundColor: s.syncing ? '#1565C0' : '#EF6C00', padding: 6 }}>
+      <Text style={{ color: '#fff', textAlign: 'center', fontSize: 12 }}>
+        {s.syncing ? 'Syncing…' : `Offline changes pending sync: ${s.pending}`}
+      </Text>
+    </View>
+  );
+}
+
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
+
+  useEffect(() => {
+    apiService.syncNow();
+    const timer = setInterval(() => apiService.syncNow(), 15000);
+    const sub = AppState.addEventListener('change', st => {
+      if (st === 'active') apiService.syncNow();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, []);
 
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <SyncBanner />
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName="LoginPinPage"

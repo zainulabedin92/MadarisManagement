@@ -19,69 +19,27 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList, Parent, Student, Teacher, ClassItem } from '../types';
 import { apiService } from '../services/api';
 import {
-  DEMO_ATTENDANCE_STUDENTS,
   getQuickStudentAttendanceStats,
   getStudentId,
 } from './AttendanceScreen';
-
-const DEMO_PARENT: Parent = {
-  _id: 'seed-p1',
-  name: 'Abdul Rehman',
-  phone: '03001234567',
-  cnic: '42101-1234567-1',
-  address: 'Sector 5-A, North Nazimabad, Karachi',
-  status: 'Active',
-};
-
-const DEMO_PARENT_CHILDREN: Student[] = [
-  {
-    ...DEMO_ATTENDANCE_STUDENTS[0],
-    classId: {
-      name: 'Shoba-e-Tahfeez (Hifz) - Batch A',
-      section: 'A',
-      roomNumber: '101',
-      academicYear: '2026-2027',
-      status: 'Active',
-      classTeacher: {
-        name: 'Qari Tariq Jameel Sahib',
-        phone: '03001234567',
-        role: 'Hifz Teacher',
-        status: 'Active',
-      },
-    },
-  },
-  {
-    ...DEMO_ATTENDANCE_STUDENTS[1],
-    classId: {
-      name: 'Shoba-e-Tahfeez (Hifz) - Batch B',
-      section: 'B',
-      roomNumber: '102',
-      academicYear: '2026-2027',
-      status: 'Active',
-      classTeacher: {
-        name: 'Qari Tariq Jameel Sahib',
-        phone: '03001234567',
-        role: 'Hifz Teacher',
-        status: 'Active',
-      },
-    },
-  },
-];
 
 interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, any>;
   route?: RouteProp<RootStackParamList, any>;
 }
 
-export const ParentPortalScreen: React.FC<Props> = ({ navigation }) => {
+export const ParentPortalScreen: React.FC<Props> = ({ navigation, route }) => {
+  const preauthToken = route?.params?.token || null;
+  const preauthParent = route?.params?.parent || null;
+
   // Auth state
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [parent, setParent] = useState<Parent | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(!!preauthParent);
+  const [parent, setParent] = useState<Parent | null>(preauthParent);
+  const [token, setToken] = useState<string | null>(preauthToken);
 
   // Login form state
-  const [identifier, setIdentifier] = useState('03001234567');
-  const [password, setPassword] = useState('password123');
+  const [identifier, setIdentifier] = useState('');
+  const [pin, setPin] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Portal data
@@ -89,57 +47,62 @@ export const ParentPortalScreen: React.FC<Props> = ({ navigation }) => {
   const [loadingChildren, setLoadingChildren] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Auto-fill demo
-  const handleQuickDemoFill = () => {
-    setIdentifier('03001234567');
-    setPassword('password123');
-  };
-
-  const handleLogin = async () => {
-    if (!identifier.trim() || !password.trim()) {
-      Alert.alert('Required Fields', 'Please enter your registered Phone/CNIC and Password.');
-      return;
-    }
-
-    setLoggingIn(true);
-    try {
-      const res = await apiService.parentLogin(identifier, password);
-      if (res.success && res.token && res.parent) {
-        setToken(res.token);
-        setParent(res.parent);
-        setIsLoggedIn(true);
-        fetchMyChildren(res.token);
-      } else {
-        // Offline / Demo fallback for Parent Portal
-        setParent(DEMO_PARENT);
-        setChildren(DEMO_PARENT_CHILDREN);
-        setIsLoggedIn(true);
-      }
-    } catch {
-      setParent(DEMO_PARENT);
-      setChildren(DEMO_PARENT_CHILDREN);
-      setIsLoggedIn(true);
-    } finally {
-      setLoggingIn(false);
-    }
-  };
-
   const fetchMyChildren = useCallback(async (authToken?: string) => {
     setLoadingChildren(true);
     try {
       const res = await apiService.getMyChildren(authToken || token || undefined);
-      if (res.success && res.children && res.children.length > 0) {
+      if (res.success && Array.isArray(res.children)) {
         setChildren(res.children);
       } else {
-        setChildren(DEMO_PARENT_CHILDREN);
+        setChildren([]);
       }
     } catch {
-      setChildren(DEMO_PARENT_CHILDREN);
+      setChildren([]);
     } finally {
       setLoadingChildren(false);
       setRefreshing(false);
     }
   }, [token]);
+
+  React.useEffect(() => {
+    if (preauthParent && preauthToken) {
+      fetchMyChildren(preauthToken);
+    }
+  }, [preauthParent, preauthToken, fetchMyChildren]);
+
+  const handleLogin = async () => {
+    if (!identifier.trim() || !pin.trim()) {
+      Alert.alert('Required Fields', 'Please enter your registered Phone/CNIC and 4-digit PIN.');
+      return;
+    }
+
+    setLoggingIn(true);
+    try {
+      const res = await apiService.parentLogin(identifier.trim(), pin.trim());
+      if (res.success && res.token && (res.parent || res.user)) {
+        const loggedParent: Parent = res.parent || {
+          _id: res.user?._id || res.user?.id,
+          name: res.user?.name || 'Parent',
+          phone: res.user?.phone || identifier.trim(),
+          cnic: res.user?.cnic || '',
+          status: (res.user?.status as Parent['status']) || 'Active',
+        };
+        setToken(res.token);
+        setParent(loggedParent);
+        setIsLoggedIn(true);
+        fetchMyChildren(res.token);
+      } else {
+        Alert.alert(
+          'Login Failed',
+          res.message || 'Invalid credentials. Please ensure your account exists in the users table.'
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Login Error', err?.message || 'Unable to connect to server.');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -147,11 +110,15 @@ export const ParentPortalScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleLogout = () => {
-    apiService.setAuthToken(null);
+    apiService.clearSession();
     setIsLoggedIn(false);
     setParent(null);
     setToken(null);
     setChildren([]);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'LoginPinPage' }],
+    });
   };
 
   const handleCallTeacher = (phone?: string) => {
@@ -371,19 +338,6 @@ export const ParentPortalScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.loginCard}>
             <Text style={styles.cardHeading}>PARENT SIGN IN (والدین لاگ ان)</Text>
 
-            {/* Quick Demo Fill Button */}
-            <TouchableOpacity
-              style={styles.demoFillBanner}
-              onPress={handleQuickDemoFill}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.demoFillIcon}>⚡</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.demoFillTitle}>1-Tap Demo Login (Abdul Rehman)</Text>
-                <Text style={styles.demoFillSub}>Phone: 03001234567 | Pass: password123</Text>
-              </View>
-            </TouchableOpacity>
-
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Registered Phone / CNIC</Text>
               <TextInput
@@ -397,16 +351,18 @@ export const ParentPortalScreen: React.FC<Props> = ({ navigation }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password (پاس ورڈ)</Text>
+              <Text style={styles.label}>4-Digit PIN (۴ ہندسی پن)</Text>
               <TextInput
                 style={styles.input}
-                placeholder="••••••••"
+                placeholder="••••"
                 placeholderTextColor="#94a3b8"
                 secureTextEntry
-                value={password}
-                onChangeText={setPassword}
+                keyboardType="numeric"
+                maxLength={4}
+                value={pin}
+                onChangeText={setPin}
               />
-              <Text style={styles.hint}>Default password was provided upon student admission</Text>
+              <Text style={styles.hint}>Default 4-digit PIN was provided upon student admission</Text>
             </View>
 
             <TouchableOpacity

@@ -36,6 +36,7 @@ export const TeacherAddScreen: React.FC<Props> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [cnic, setCnic] = useState('');
   const [selectedRole, setSelectedRole] = useState('Hifz Teacher');
+  const [pin, setPin] = useState('1234');
   const [status, setStatus] = useState<'Active' | 'Inactive'>('Active');
   const [submitting, setSubmitting] = useState(false);
 
@@ -61,16 +62,6 @@ export const TeacherAddScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handlePreFill = () => {
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    setName(`Qari Abdul Sami Sahib`);
-    setPhone(`0301-${randomSuffix}55`);
-    setEmail(`sami.${randomSuffix}@mms.edu`);
-    setCnic(`42101-4455667-${Math.floor(1 + Math.random() * 9)}`);
-    setSelectedRole('Hifz Teacher');
-    setStatus('Active');
-  };
-
   const handleSubmit = async () => {
     if (!name.trim()) {
       Alert.alert('Required Field', 'Please enter Teacher full name.');
@@ -79,6 +70,12 @@ export const TeacherAddScreen: React.FC<Props> = ({ navigation }) => {
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length < 10) {
       Alert.alert('Invalid Phone', 'Please enter a valid 11-digit phone number (e.g. 0300-1234567).');
+      return;
+    }
+
+    const cleanPin = pin.trim();
+    if (!/^\d{4}$/.test(cleanPin)) {
+      Alert.alert('Invalid PIN', 'Teacher 4-Digit Login PIN must be exactly 4 numeric digits (e.g. 1234).');
       return;
     }
 
@@ -91,12 +88,14 @@ export const TeacherAddScreen: React.FC<Props> = ({ navigation }) => {
         cnic: cnic.trim() || undefined,
         role: selectedRole,
         status,
+        pin: cleanPin,
+        password: cleanPin,
       });
 
       if (res.success) {
         Alert.alert(
           'Teacher Registered!',
-          `Hazrat ${name} has been successfully added to MMS Faculty.`,
+          `Hazrat ${name} has been successfully added to MMS Faculty.\n\nTeacher Login Credentials:\nPhone: ${phone.trim()}\n4-Digit PIN: ${cleanPin}\n\nPlease share this 4-digit PIN with the teacher to log in.`,
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } else {
@@ -126,10 +125,6 @@ export const TeacherAddScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.headerTitle}>Add New Teacher</Text>
           <Text style={styles.headerSubtitle}>استاذ کی نئی رجسٹریشن</Text>
         </View>
-
-        <TouchableOpacity style={styles.prefillBtn} onPress={handlePreFill}>
-          <Text style={styles.prefillBtnText}>⚡ Demo Fill</Text>
-        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -196,6 +191,25 @@ export const TeacherAddScreen: React.FC<Props> = ({ navigation }) => {
                 value={cnic}
                 onChangeText={handleCnicChange}
               />
+            </View>
+
+            {/* Teacher 4-Digit Login PIN */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Teacher 4-Digit Login PIN (استاذ لاگ ان پن) <Text style={styles.req}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="1234"
+                placeholderTextColor="#94a3b8"
+                keyboardType="numeric"
+                maxLength={4}
+                value={pin}
+                onChangeText={(val) => setPin(val.replace(/\D/g, '').slice(0, 4))}
+              />
+              <Text style={styles.hint}>
+                Teacher will use their Phone Number or CNIC and this 4-digit PIN to sign in
+              </Text>
             </View>
 
             {/* Role Picker */}

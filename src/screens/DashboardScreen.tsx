@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../types';
+import { RootStackParamList, Student } from '../types';
+import { apiService } from '../services/api';
 import { SuperAdminDashboard } from './SuperAdminDashboard';
+import { getQuickStudentAttendanceStats, getStudentId } from './AttendanceScreen';
 
 interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, any>;
@@ -40,21 +42,309 @@ export const DashboardScreen: React.FC<Props> = ({ navigation, route }) => {
   const userName = route?.params?.userName || 'Maulana Abdul Rahman';
   const roleTitle = route?.params?.role || 'NAZIM-E-TALEEM PORTAL';
 
-  // If SuperAdmin, render SuperAdminDashboard
+  // If SuperAdmin, render SuperAdminDashboard with all admin options
   const isSuperAdmin =
     roleTitle?.toLowerCase().includes('superadmin') ||
     roleTitle?.toLowerCase().includes('muhtamim') ||
-    route?.params?.role?.toLowerCase() === 'superadmin';
+    route?.params?.role?.toLowerCase() === 'superadmin' ||
+    route?.params?.role?.toLowerCase() === 'admin' ||
+    (!route?.params?.role && apiService.isSuperAdmin());
 
-  if (isSuperAdmin) {
-    return <SuperAdminDashboard navigation={navigation} route={route} />;
-  }
+  const isStudent =
+    !isSuperAdmin &&
+    (roleTitle?.toLowerCase() === 'student' ||
+      route?.params?.role?.toLowerCase() === 'student' ||
+      apiService.isStudent());
 
   const [selectedBranch, setSelectedBranch] = useState('Branch 1');
   const [selectedInstitution, setSelectedInstitution] = useState('Jamia Darul Uloom');
   const [branchModalVisible, setBranchModalVisible] = useState(false);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [totalTalaba, setTotalTalaba] = useState<number | null>(null);
+  const [studentProfile, setStudentProfile] = useState<Student | null>(
+    () => route?.params?.student || apiService.getCurrentStudent()
+  );
+
+  const fetchTotalTalaba = useCallback(async () => {
+    if (isSuperAdmin || isStudent) return;
+    try {
+      const res = await apiService.getAllStudents();
+      if (res.success) {
+        const count = Array.isArray(res.students)
+          ? res.students.length
+          : typeof res.count === 'number'
+          ? res.count
+          : 0;
+        setTotalTalaba(count);
+      } else {
+        setTotalTalaba(0);
+      }
+    } catch {
+      setTotalTalaba((prev) => (prev !== null ? prev : 0));
+    }
+  }, [isSuperAdmin, isStudent]);
+
+  const loadStudentProfile = useCallback(async () => {
+    if (!isStudent) return;
+    if (route?.params?.student) {
+      setStudentProfile(route.params.student);
+    }
+    try {
+      const res = await apiService.getMyProfile();
+      if (res.success && res.student) {
+        setStudentProfile(res.student);
+      } else if (!res.success) {
+        const cached = apiService.getCurrentStudent();
+        if (cached) setStudentProfile(cached);
+      }
+    } catch {
+      const cached = apiService.getCurrentStudent();
+      if (cached) setStudentProfile(cached);
+    }
+  }, [isStudent, route?.params?.student]);
+
+  useEffect(() => {
+    if (!apiService.getSessionRole()) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'LoginPinPage' }],
+      });
+      return;
+    }
+    fetchTotalTalaba();
+    loadStudentProfile();
+  }, [navigation, fetchTotalTalaba, loadStudentProfile]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (!apiService.getSessionRole()) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'LoginPinPage' }],
+        });
+        return;
+      }
+      fetchTotalTalaba();
+      loadStudentProfile();
+    });
+    return unsubscribe;
+  }, [navigation, fetchTotalTalaba, loadStudentProfile]);
+
+  if (isSuperAdmin) {
+    return <SuperAdminDashboard navigation={navigation} route={route} />;
+  }
+
+  if (isStudent) {
+    const studentDisplayName =
+      studentProfile?.fullName ||
+      `${studentProfile?.firstName || ''} ${studentProfile?.lastName || ''}`.trim() ||
+      userName ||
+      'Talib-e-Ilm';
+    const studentStatus = studentProfile?.status || 'pending';
+    const isEnrolled =
+      studentStatus.toLowerCase() === 'enrolled' ||
+      studentStatus.toLowerCase() === 'approved';
+    const classObj =
+      studentProfile?.classId && typeof studentProfile.classId === 'object'
+        ? studentProfile.classId
+        : null;
+    const classTeacherObj =
+      classObj?.classTeacher && typeof classObj.classTeacher === 'object'
+        ? classObj.classTeacher
+        : null;
+    const parentObj =
+      studentProfile?.parentId && typeof studentProfile.parentId === 'object'
+        ? studentProfile.parentId
+        : null;
+    const attendanceStats = studentProfile
+      ? getQuickStudentAttendanceStats(studentProfile)
+      : null;
+    const studentRecordId = studentProfile ? getStudentId(studentProfile, 0) : '';
+
+    const handleStudentLogout = () => {
+      apiService.clearSession();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'LoginPinPage' }],
+      });
+    };
+
+    const profileRows = [
+      { label: 'Full Name', value: studentDisplayName },
+      { label: "Father's Name", value: studentProfile?.fatherName || '—' },
+      { label: 'Roll No', value: studentProfile?.rollNo || 'Pending Assignment' },
+      { label: 'CNIC / B-Form', value: studentProfile?.cnic || studentProfile?.bFormNo || '—' },
+      {
+        label: 'Darja / Program',
+        value: studentProfile?.enrollmentProgram || 'General Madaris',
+      },
+      {
+        label: 'Class & Section',
+        value: classObj ? `${classObj.name} (${classObj.section})` : 'Not assigned yet',
+      },
+      ...(classTeacherObj ? [{ label: 'Class Teacher', value: classTeacherObj.name }] : []),
+      ...(parentObj ? [{ label: 'Guardian', value: `${parentObj.name} (${parentObj.phone})` }] : []),
+      { label: 'Guardian Mobile', value: studentProfile?.guardianMobile || '—' },
+      { label: 'Guardian Email', value: studentProfile?.guardianEmail || '—' },
+      { label: 'City', value: studentProfile?.city || '—' },
+      { label: 'Address', value: studentProfile?.address || '—' },
+    ];
+
+    return (
+      <SafeAreaView style={styles.safeContainer} edges={['top', 'bottom', 'left', 'right']}>
+        <StatusBar barStyle="light-content" />
+
+        {/* Student Top Header */}
+        <View style={styles.studentPortalHeader}>
+          <View style={styles.studentPortalHeaderTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.studentPortalBadge}>STUDENT PORTAL • طالب علم</Text>
+              <Text style={styles.studentPortalName} numberOfLines={1}>
+                {studentDisplayName}
+              </Text>
+              <Text style={styles.studentPortalMeta}>
+                {studentProfile?.rollNo ? `Roll No: ${studentProfile.rollNo} • ` : ''}
+                {studentProfile?.enrollmentProgram || 'General Madaris'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.studentLogoutBtn}
+              activeOpacity={0.8}
+              onPress={handleStudentLogout}
+            >
+              <Text style={styles.studentLogoutText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.studentStatusRow}>
+            <View
+              style={[
+                styles.studentStatusPill,
+                isEnrolled ? styles.studentStatusPillActive : styles.studentStatusPillPending,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.studentStatusPillText,
+                  isEnrolled ? styles.studentStatusTextActive : styles.studentStatusTextPending,
+                ]}
+              >
+                {isEnrolled ? '● Active / Enrolled' : `⏳ Status: ${studentStatus}`}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.studentRefreshBtn}
+              activeOpacity={0.8}
+              onPress={loadStudentProfile}
+            >
+              <Text style={styles.studentRefreshText}>↻ Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.studentPortalBody}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Attendance Summary Card */}
+          <View style={styles.studentCard}>
+            <View style={styles.studentCardHeader}>
+              <Text style={styles.studentCardTitle}>📅 My Attendance Summary</Text>
+              {attendanceStats ? (
+                <View style={styles.studentTodayBadge}>
+                  <Text style={styles.studentTodayText}>
+                    Today: {attendanceStats.todayStatus}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {attendanceStats ? (
+              <>
+                <View style={styles.studentStatsGrid}>
+                  <View style={styles.studentStatBox}>
+                    <Text style={styles.studentStatNum}>{attendanceStats.monthlyPct}%</Text>
+                    <Text style={styles.studentStatLbl}>Monthly</Text>
+                  </View>
+                  <View style={styles.studentStatBox}>
+                    <Text style={styles.studentStatNum}>{attendanceStats.yearlyPct}%</Text>
+                    <Text style={styles.studentStatLbl}>Yearly</Text>
+                  </View>
+                  <View style={styles.studentStatBox}>
+                    <Text style={[styles.studentStatNum, { color: '#059669' }]}>
+                      {attendanceStats.presentDays}
+                    </Text>
+                    <Text style={styles.studentStatLbl}>Present</Text>
+                  </View>
+                  <View style={styles.studentStatBox}>
+                    <Text style={[styles.studentStatNum, { color: '#DC2626' }]}>
+                      {attendanceStats.absentDays}
+                    </Text>
+                    <Text style={styles.studentStatLbl}>Absent</Text>
+                  </View>
+                </View>
+
+                <View style={styles.studentActionRow}>
+                  <TouchableOpacity
+                    style={styles.studentPrimaryBtn}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      navigation.navigate('AttendanceScreen', {
+                        initialTab: 'monthly',
+                        role: 'student',
+                        readOnly: true,
+                        studentId: studentRecordId,
+                        studentName: studentDisplayName,
+                      })
+                    }
+                  >
+                    <Text style={styles.studentPrimaryBtnText}>📊 Monthly Report</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.studentSecondaryBtn}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      navigation.navigate('AttendanceScreen', {
+                        initialTab: 'yearly',
+                        role: 'student',
+                        readOnly: true,
+                        studentId: studentRecordId,
+                        studentName: studentDisplayName,
+                      })
+                    }
+                  >
+                    <Text style={styles.studentSecondaryBtnText}>📈 Yearly Report</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.studentEmptyNote}>
+                Your profile details are syncing. Pull or tap Refresh to load attendance stats.
+              </Text>
+            )}
+          </View>
+
+          {/* Student Personal Record Card */}
+          <View style={styles.studentCard}>
+            <Text style={styles.studentCardTitle}>🪪 My Profile & Admission Details</Text>
+            <View style={styles.studentInfoList}>
+              {profileRows.map((row) => (
+                <View key={row.label} style={styles.studentInfoRow}>
+                  <Text style={styles.studentInfoLabel}>{row.label}</Text>
+                  <Text style={styles.studentInfoValue}>{row.value}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   const branches = [
     { id: '1', name: 'Branch 1 — Markaz Campus', code: 'Branch 1' },
@@ -349,7 +639,9 @@ export const DashboardScreen: React.FC<Props> = ({ navigation, route }) => {
               </View>
             </View>
 
-            <Text style={styles.metricBigNumber}>482</Text>
+            <Text style={styles.metricBigNumber}>
+              {totalTalaba !== null ? totalTalaba.toLocaleString() : '...'}
+            </Text>
             <Text style={styles.metricSubtitle}>Total Talaba (Hifz & Dars)</Text>
           </TouchableOpacity>
 
@@ -453,7 +745,13 @@ export const DashboardScreen: React.FC<Props> = ({ navigation, route }) => {
         <View style={styles.bottomNavRow}>
           <TouchableOpacity
             style={styles.navBtnSecondary}
-            onPress={() => navigation.navigate('LoginPinPage')}
+            onPress={() => {
+              apiService.clearSession();
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'LoginPinPage' }],
+              });
+            }}
           >
             <Text style={styles.navBtnSecondaryText}>← Sign In / Exit</Text>
           </TouchableOpacity>
@@ -608,7 +906,11 @@ export const DashboardScreen: React.FC<Props> = ({ navigation, route }) => {
               style={styles.logoutBtn}
               onPress={() => {
                 setProfileModalVisible(false);
-                navigation.navigate('LoginPinPage');
+                apiService.clearSession();
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'LoginPinPage' }],
+                });
               }}
             >
               <Text style={styles.logoutBtnText}>Switch Account / Logout</Text>
@@ -1393,5 +1695,212 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#DC2626',
+  },
+
+  /* STUDENT PORTAL (SCOPED SELF-VIEW) */
+  studentPortalHeader: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  studentPortalHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  studentPortalBadge: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FCD34D',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  studentPortalName: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  studentPortalMeta: {
+    fontSize: 13,
+    color: '#D1FAE5',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  studentLogoutBtn: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  studentLogoutText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  studentStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+  },
+  studentStatusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  studentStatusPillActive: {
+    backgroundColor: '#D1FAE5',
+  },
+  studentStatusPillPending: {
+    backgroundColor: '#FEF3C7',
+  },
+  studentStatusPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  studentStatusTextActive: {
+    color: '#065F46',
+  },
+  studentStatusTextPending: {
+    color: '#92400E',
+  },
+  studentRefreshBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  studentRefreshText: {
+    color: '#ECFDF5',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  studentPortalBody: {
+    padding: 16,
+    gap: 14,
+    paddingBottom: 28,
+  },
+  studentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  studentCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  studentCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#064E3B',
+    marginBottom: 10,
+  },
+  studentTodayBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginBottom: 10,
+  },
+  studentTodayText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  studentStatsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  studentStatBox: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  studentStatNum: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#064E3B',
+  },
+  studentStatLbl: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  studentActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  studentPrimaryBtn: {
+    flex: 1,
+    backgroundColor: '#064E3B',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  studentPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  studentSecondaryBtn: {
+    flex: 1,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  studentSecondaryBtnText: {
+    color: '#065F46',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  studentEmptyNote: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  studentInfoList: {
+    marginTop: 2,
+  },
+  studentInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    gap: 12,
+  },
+  studentInfoLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '600',
+    minWidth: 110,
+  },
+  studentInfoValue: {
+    flex: 1,
+    fontSize: 13,
+    color: '#111827',
+    fontWeight: '700',
+    textAlign: 'right',
   },
 });

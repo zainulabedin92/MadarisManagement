@@ -18,7 +18,6 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList, Teacher, ClassItem, Student } from '../types';
 import { apiService } from '../services/api';
 import {
-  DEMO_ATTENDANCE_STUDENTS,
   getQuickStudentAttendanceStats,
   getStudentFullName,
   getStudentDarja,
@@ -29,98 +28,6 @@ interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, 'TeacherPortalScreen'>;
   route?: RouteProp<RootStackParamList, 'TeacherPortalScreen'>;
 }
-
-const DEMO_TEACHERS: Teacher[] = [
-  {
-    _id: 'seed-t1',
-    name: 'Qari Tariq Jameel Sahib',
-    phone: '03001234567',
-    email: 'qari.tariq@mms.edu',
-    cnic: '42101-1122334-1',
-    role: 'Hifz Teacher',
-    status: 'Active',
-  },
-  {
-    _id: 'seed-t2',
-    name: 'Maulana Bilal Ahmad',
-    phone: '03219876543',
-    email: 'bilal.ahmad@mms.edu',
-    cnic: '35201-5566778-3',
-    role: 'Darse Nizami Teacher',
-    status: 'Active',
-  },
-  {
-    _id: 'seed-t4',
-    name: 'Qari Saeed-ur-Rehman',
-    phone: '03456677889',
-    email: 'saeed.rehman@mms.edu',
-    cnic: '37405-3344556-7',
-    role: 'Tajweed Teacher',
-    status: 'Active',
-  },
-  {
-    _id: 'seed-t5',
-    name: 'Maulana Zubair Usmani',
-    phone: '03125556677',
-    email: 'zubair.usmani@mms.edu',
-    cnic: '42201-9988776-9',
-    role: 'Nazra Teacher',
-    status: 'Active',
-  },
-];
-
-const DEMO_CLASSES: (ClassItem & { darjaFilter: string })[] = [
-  {
-    _id: 'seed-c1',
-    name: 'Shoba-e-Tahfeez (Hifz) - Batch A',
-    section: 'A',
-    roomNumber: '101',
-    academicYear: '2026-2027',
-    status: 'Active',
-    darjaFilter: 'Hifz-ul-Quran',
-    classTeacher: DEMO_TEACHERS[0],
-  },
-  {
-    _id: 'seed-c2',
-    name: 'Shoba-e-Tahfeez (Hifz) - Batch B',
-    section: 'B',
-    roomNumber: '102',
-    academicYear: '2026-2027',
-    status: 'Active',
-    darjaFilter: 'Hifz-ul-Quran',
-    classTeacher: DEMO_TEACHERS[0],
-  },
-  {
-    _id: 'seed-c3',
-    name: 'Dars-e-Nizami (Sanwiya Khasa)',
-    section: 'A',
-    roomNumber: '201',
-    academicYear: '2026-2027',
-    status: 'Active',
-    darjaFilter: 'Dars-e-Nizami',
-    classTeacher: DEMO_TEACHERS[1],
-  },
-  {
-    _id: 'seed-c4',
-    name: 'Tajweed & Qiraat Academy',
-    section: 'A',
-    roomNumber: '204',
-    academicYear: '2026-2027',
-    status: 'Active',
-    darjaFilter: 'Tajweed & Qirat',
-    classTeacher: DEMO_TEACHERS[2],
-  },
-  {
-    _id: 'seed-c5',
-    name: 'Nazra Quran & Ibtidaiyya',
-    section: 'C',
-    roomNumber: '105',
-    academicYear: '2026-2027',
-    status: 'Active',
-    darjaFilter: 'Nazra Quran',
-    classTeacher: DEMO_TEACHERS[3],
-  },
-];
 
 function inferDarjaFromClassName(className: string): string {
   const lower = className.toLowerCase();
@@ -140,16 +47,14 @@ export const TeacherPortalScreen: React.FC<Props> = ({ navigation, route }) => {
   const [teacher, setTeacher] = useState<Teacher | null>(preauthenticatedTeacher);
 
   // Login form state
-  const [identifier, setIdentifier] = useState<string>('03001234567');
-  const [pin, setPin] = useState<string>('1234');
+  const [identifier, setIdentifier] = useState<string>('');
+  const [pin, setPin] = useState<string>('');
   const [loggingIn, setLoggingIn] = useState<boolean>(false);
 
-  // Data state
-  const [allTeachers, setAllTeachers] = useState<Teacher[]>(DEMO_TEACHERS);
-  const [allClasses, setAllClasses] = useState<(ClassItem & { darjaFilter?: string })[]>(
-    DEMO_CLASSES
-  );
-  const [allStudents, setAllStudents] = useState<Student[]>(DEMO_ATTENDANCE_STUDENTS);
+  // Data state (populated exclusively from live API / SuperAdmin entries)
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
+  const [allClasses, setAllClasses] = useState<(ClassItem & { darjaFilter?: string })[]>([]);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [selectedClass, setSelectedClass] = useState<
     (ClassItem & { darjaFilter?: string }) | null
   >(null);
@@ -163,31 +68,31 @@ export const TeacherPortalScreen: React.FC<Props> = ({ navigation, route }) => {
         apiService.getAllStudents().catch(() => null),
       ]);
 
-      if (tRes && tRes.success && tRes.teachers && tRes.teachers.length > 0) {
-        const phones = new Set(tRes.teachers.map((t) => t.phone));
-        const uniqueDemo = DEMO_TEACHERS.filter((d) => !phones.has(d.phone));
-        setAllTeachers([...tRes.teachers, ...uniqueDemo]);
+      if (tRes && tRes.success && Array.isArray(tRes.teachers)) {
+        setAllTeachers(tRes.teachers);
+      } else {
+        setAllTeachers([]);
       }
 
-      if (cRes && cRes.success && cRes.classes && cRes.classes.length > 0) {
+      if (cRes && cRes.success && Array.isArray(cRes.classes)) {
         const mapped = cRes.classes.map((c) => ({
           ...c,
           darjaFilter: inferDarjaFromClassName(c.name),
         }));
         setAllClasses(mapped);
+      } else {
+        setAllClasses([]);
       }
 
-      if (sRes && sRes.success && sRes.students && sRes.students.length > 0) {
-        const existingNames = new Set(
-          sRes.students.map((s) => getStudentFullName(s).toLowerCase())
-        );
-        const uniqueDemo = DEMO_ATTENDANCE_STUDENTS.filter(
-          (d) => !existingNames.has(getStudentFullName(d).toLowerCase())
-        );
-        setAllStudents([...sRes.students, ...uniqueDemo]);
+      if (sRes && sRes.success && Array.isArray(sRes.students)) {
+        setAllStudents(sRes.students);
+      } else {
+        setAllStudents([]);
       }
     } catch {
-      // Fallback to demo data
+      setAllTeachers([]);
+      setAllClasses([]);
+      setAllStudents([]);
     }
   }, []);
 
@@ -203,42 +108,52 @@ export const TeacherPortalScreen: React.FC<Props> = ({ navigation, route }) => {
     return unsub;
   }, [navigation]);
 
-  const handleTeacherLogin = () => {
+  const handleTeacherLogin = async () => {
     if (!identifier.trim() || !pin.trim()) {
       Alert.alert('Required Fields', 'Please enter your registered Phone/CNIC and PIN.');
       return;
     }
 
     setLoggingIn(true);
-    setTimeout(() => {
-      const cleanId = identifier.trim().replace(/\D/g, '');
-      const textId = identifier.trim().toLowerCase();
 
-      const matched =
-        allTeachers.find(
-          (t) =>
-            t.phone.replace(/\D/g, '') === cleanId ||
-            (t.cnic && t.cnic.replace(/\D/g, '') === cleanId) ||
-            t.name.toLowerCase().includes(textId)
-        ) || DEMO_TEACHERS[0];
-
-      setTeacher(matched);
-      setIsLoggedIn(true);
+    // Authenticate strictly against central `users` table via backend API
+    try {
+      const res = await apiService.teacherLogin(identifier.trim(), pin.trim());
+      if (res.success && (res.teacher || res.user)) {
+        const loggedTeacher: Teacher = res.teacher || {
+          _id: res.user?._id || res.user?.id,
+          name: res.user?.name || 'Teacher',
+          phone: res.user?.phone || identifier.trim(),
+          cnic: res.user?.cnic,
+          email: res.user?.email,
+          role: res.user?.role || 'teacher',
+          status: res.user?.status || 'Active',
+        };
+        setTeacher(loggedTeacher);
+        setIsLoggedIn(true);
+        setLoggingIn(false);
+        return;
+      }
+      Alert.alert(
+        'Login Failed',
+        res.message || 'Invalid credentials. Please ensure your teacher account exists in the users table.'
+      );
+    } catch (e: any) {
+      Alert.alert('Login Error', e?.message || 'Unable to authenticate with server.');
+    } finally {
       setLoggingIn(false);
-    }, 250);
-  };
-
-  const handleSelectDemoTeacher = (demoT: Teacher) => {
-    setIdentifier(demoT.phone);
-    setPin('1234');
-    setTeacher(demoT);
-    setIsLoggedIn(true);
+    }
   };
 
   const handleLogout = () => {
+    apiService.clearSession();
     setIsLoggedIn(false);
     setTeacher(null);
     setSelectedClass(null);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'LoginPinPage' }],
+    });
   };
 
   // Classes assigned to the logged-in teacher
@@ -344,32 +259,6 @@ export const TeacherPortalScreen: React.FC<Props> = ({ navigation, route }) => {
             <Text style={styles.cardHeading}>
               TEACHER SIGN IN (استاذ لاگ ان)
             </Text>
-
-            {/* Quick 1-Tap Teacher Demo Accounts */}
-            <Text style={styles.demoSelectLabel}>
-              ⚡ 1-Tap Demo Teacher Login (Select Ustad):
-            </Text>
-            <View style={styles.demoTeachersGrid}>
-              {DEMO_TEACHERS.map((dt) => (
-                <TouchableOpacity
-                  key={dt._id}
-                  style={styles.demoTeacherBtn}
-                  onPress={() => handleSelectDemoTeacher(dt)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.demoTeacherIcon}>👳‍♂️</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.demoTeacherName} numberOfLines={1}>
-                      {dt.name}
-                    </Text>
-                    <Text style={styles.demoTeacherRole}>
-                      {dt.role} • {dt.phone}
-                    </Text>
-                  </View>
-                  <Text style={styles.demoTeacherArrow}>Login →</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Registered Mobile Phone or CNIC</Text>

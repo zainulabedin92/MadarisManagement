@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,14 @@ import {
   Modal,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../types';
+import { RootStackParamList, Student, Teacher, Parent, ClassItem } from '../types';
+import { apiService } from '../services/api';
+import Logo from '../assets/img/logo-mms.png';
 
 interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, any>;
@@ -27,6 +30,110 @@ const CARD_WIDTH = (width - 32 - 12) / 2;
 export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const userName = route?.params?.userName || 'Hazrat Maulana Muhtamim Sahib';
+
+  const [studentsList, setStudentsList] = useState<Student[]>([]);
+  const [teachersList, setTeachersList] = useState<Teacher[]>([]);
+  const [parentsList, setParentsList] = useState<Parent[]>([]);
+  const [classesList, setClassesList] = useState<ClassItem[]>([]);
+  const [talabaCountLoaded, setTalabaCountLoaded] = useState(false);
+
+  const fetchStudentsCount = useCallback(async () => {
+    try {
+      const [sRes, tRes, pRes, cRes] = await Promise.all([
+        apiService.getAllStudents().catch(() => null),
+        apiService.getTeachers().catch(() => null),
+        apiService.getAllParents().catch(() => null),
+        apiService.getClasses().catch(() => null),
+      ]);
+      if (sRes?.success && Array.isArray(sRes.students)) {
+        setStudentsList(sRes.students);
+      }
+      if (tRes?.success && Array.isArray(tRes.teachers)) {
+        setTeachersList(tRes.teachers);
+      }
+      if (pRes?.success && Array.isArray(pRes.parents)) {
+        setParentsList(pRes.parents);
+      }
+      if (cRes?.success && Array.isArray(cRes.classes)) {
+        setClassesList(cRes.classes);
+      }
+    } catch {
+      // Keep previous counts if offline
+    } finally {
+      setTalabaCountLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!apiService.isSuperAdmin()) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'LoginPinPage' }],
+      });
+      return;
+    }
+    fetchStudentsCount();
+  }, [navigation, fetchStudentsCount]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (!apiService.isSuperAdmin()) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'LoginPinPage' }],
+        });
+        return;
+      }
+      fetchStudentsCount();
+    });
+    return unsubscribe;
+  }, [navigation, fetchStudentsCount]);
+
+  const totalTalaba = studentsList.length;
+  const activeTalabaCount = studentsList.filter((s) => {
+    const st = (s.status || '').toLowerCase();
+    return st === 'approved' || st === 'enrolled';
+  }).length;
+  const pendingTalabaCount = studentsList.filter(
+    (s) => (s.status || '').toLowerCase() === 'pending'
+  ).length;
+  const hifzCount = studentsList.filter((s) => {
+    const prog = (
+      s.enrollmentProgram ||
+      (typeof s.classId === 'object' ? s.classId?.name : '') ||
+      ''
+    ).toLowerCase();
+    return prog.includes('hifz') || prog.includes('tahfeez');
+  }).length;
+  const darsCount = studentsList.filter((s) => {
+    const prog = (
+      s.enrollmentProgram ||
+      (typeof s.classId === 'object' ? s.classId?.name : '') ||
+      ''
+    ).toLowerCase();
+    return prog.includes('dars') || prog.includes('aalim');
+  }).length;
+  const nazraTajweedCount = studentsList.filter((s) => {
+    const prog = (
+      s.enrollmentProgram ||
+      (typeof s.classId === 'object' ? s.classId?.name : '') ||
+      ''
+    ).toLowerCase();
+    return prog.includes('nazra') || prog.includes('tajweed');
+  }).length;
+
+  const totalTeachers = teachersList.length;
+  const activeTeachersCount = teachersList.filter(
+    (t) => (t.status || 'Active').toLowerCase() === 'active'
+  ).length;
+  const totalParents = parentsList.length;
+  const activeParentsCount = parentsList.filter(
+    (p) => (p.status || 'Active').toLowerCase() === 'active'
+  ).length;
+  const totalClasses = classesList.length;
+  const activeClassesCount = classesList.filter(
+    (c) => (c.status || 'Active').toLowerCase() === 'active'
+  ).length;
 
   // Navigation and active states
   const [activeTab, setActiveTab] = useState<'Home' | 'Talaba' | 'Taleem' | 'Operations' | 'Hostel/Fees' | 'More'>('Home');
@@ -46,21 +153,20 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
   } | null>(null);
 
   // Institution & Branch state
-  const [selectedInstitution, setSelectedInstitution] = useState('Jamia Darul Ulo...');
-  const [selectedJurisdiction, setSelectedJurisdiction] = useState('Markaz-e-Noor (Main Cam...');
-  const [branchCount, setBranchCount] = useState('4 Branches');
+  const [selectedInstitution, setSelectedInstitution] = useState('Markaz-e-Noor...');
+  const [selectedJurisdiction, setSelectedJurisdiction] = useState('Main Campus');
 
   const institutions = [
-    { id: '1', name: 'Jamia Darul Uloom Karachi', short: 'Jamia Darul Ulo...' },
-    { id: '2', name: 'Markaz-e-Noor Central Idara', short: 'Markaz-e-Noor...' },
-    { id: '3', name: 'Jamia Ashrafia Lahore', short: 'Jamia Ashrafia...' },
+    { id: '1', name: 'Markaz-e-Noor Central Idara', short: 'Markaz-e-Noor...' },
   ];
 
   const branches = [
-    { id: '1', name: 'Markaz-e-Noor (Main Campus)', code: 'Main Campus', talaba: '740' },
-    { id: '2', name: 'Hifz Academy (Branch 2)', code: 'Branch 2', talaba: '380' },
-    { id: '3', name: 'Banat Girls Campus (Branch 3)', code: 'Branch 3', talaba: '242' },
-    { id: '4', name: 'Noor-ul-Quran Branch 4', code: 'Branch 4', talaba: '120' },
+    {
+      id: '1',
+      name: 'Markaz-e-Noor (Main Campus)',
+      code: 'Main Campus',
+      talaba: String(totalTalaba),
+    },
   ];
 
   const handleCardPress = (cardType: 'TALABA' | 'ASATEZA' | 'WALIDAIN' | 'DARJAAT') => {
@@ -68,13 +174,13 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
       case 'TALABA':
         setSelectedCardDetail({
           title: 'Markazi Talaba (Students)',
-          value: '1,482',
-          subtitle: 'Active Registered Students across 4 Campuses',
+          value: talabaCountLoaded ? totalTalaba.toLocaleString() : '...',
+          subtitle: `${activeTalabaCount.toLocaleString()} Active Registered Students`,
           details: [
-            '📖 Hifz-ul-Quran: 620 Talaba',
-            '📚 Dars-e-Nizami (Aalim): 540 Talaba',
-            '✨ Nazra & Tajweed: 322 Talaba',
-            '⏳ New Pending Dakhla Applications: 18',
+            `📖 Hifz-ul-Quran: ${hifzCount.toLocaleString()} Talaba`,
+            `📚 Dars-e-Nizami (Aalim): ${darsCount.toLocaleString()} Talaba`,
+            `✨ Nazra & Tajweed: ${nazraTajweedCount.toLocaleString()} Talaba`,
+            `⏳ Pending Approvals: ${pendingTalabaCount.toLocaleString()}`,
           ],
           actionTitle: 'View Complete Talaba Directory 📋',
           action: () => {
@@ -87,14 +193,11 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
       case 'ASATEZA':
         setSelectedCardDetail({
           title: 'Asateza-e-Kiram (Faculty)',
-          value: '64',
-          subtitle: 'Active Faculty Members & Muallimeen',
+          value: talabaCountLoaded ? totalTeachers.toLocaleString() : '...',
+          subtitle: `${activeTeachersCount.toLocaleString()} Active Faculty Members`,
           details: [
-            '👳‍♂️ Shuyookh & Senior Muallimeen: 14',
-            '📖 Hifz Muallimeen: 26',
-            '📚 Dars-e-Nizami Lecturers: 18',
-            '🟢 Present on Duty Today: 62 / 64 (97%)',
-            '🟡 On Approved Leave: 2',
+            `👳‍♂️ Total Faculty Members: ${totalTeachers.toLocaleString()}`,
+            `🟢 Active Faculty: ${activeTeachersCount.toLocaleString()}`,
           ],
           actionTitle: 'View Complete Faculty Directory (اساتذہ) 📋',
           action: () => {
@@ -107,13 +210,11 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
       case 'WALIDAIN':
         setSelectedCardDetail({
           title: 'Walidain (Guardians & Parents)',
-          value: '1,120',
-          subtitle: 'Registered Guardians in MMS Portal',
+          value: talabaCountLoaded ? totalParents.toLocaleString() : '...',
+          subtitle: `${activeParentsCount.toLocaleString()} Active Guardians in Users Table`,
           details: [
-            '📱 Active WhatsApp & SMS Alerts: 1,098',
-            '🛡️ B-Form / CNIC Verified: 1,120 (100%)',
-            '💬 Last Notice Broadcast: Ramadan Timetable Notice',
-            '📩 Unread Guardian Inquiries: 5',
+            `👥 Total Guardians: ${totalParents.toLocaleString()}`,
+            `🟢 Active Guardians: ${activeParentsCount.toLocaleString()}`,
           ],
           actionTitle: 'View Guardians Directory (والدین) 👨‍👩‍👦',
           action: () => {
@@ -126,13 +227,11 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
       case 'DARJAAT':
         setSelectedCardDetail({
           title: 'Darjaat (Active Sections)',
-          value: '36',
-          subtitle: 'Classrooms & Sections currently operating',
+          value: talabaCountLoaded ? totalClasses.toLocaleString() : '...',
+          subtitle: `${activeClassesCount.toLocaleString()} Active Classrooms & Sections`,
           details: [
-            '🏛️ Hifz Sections (Shoba-e-Tahfeez): 16 Classes',
-            '📖 Dars-e-Nizami (Sanwiya, Aalia, Aalmiya): 12 Classes',
-            '⭐ Tajweed & Qiraat: 5 Classes',
-            '🌙 Ibtidaiyya (Prep): 3 Classes',
+            `🏛️ Total Classes: ${totalClasses.toLocaleString()}`,
+            `🟢 Active Classes: ${activeClassesCount.toLocaleString()}`,
           ],
           actionTitle: 'View All Active Classes & Darjat 🏛️',
           action: () => {
@@ -147,7 +246,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
   const handleOverviewPress = () => {
     Alert.alert(
       'Markazi Arkaan Overview',
-      'Executive Summary for Muhtamim Sahib:\n\n• Talaba: 1,482 Active\n• Asateza: 64 Active\n• Walidain: 1,120 Registered\n• Darjaat: 36 Sections\n\nOverall Attendance: 98.4%\nDaily Operations: Normal'
+      `Live Summary for ${userName}:\n\n• Talaba: ${totalTalaba.toLocaleString()} Total (${activeTalabaCount.toLocaleString()} Active)\n• Asateza: ${totalTeachers.toLocaleString()} (${activeTeachersCount.toLocaleString()} Active)\n• Walidain: ${totalParents.toLocaleString()} Registered\n• Darjaat: ${totalClasses.toLocaleString()} Sections`
     );
   };
 
@@ -162,7 +261,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
           {/* Logo Badge */}
           <View style={styles.logoBadgeContainer}>
             <View style={styles.logoEmblemCircle}>
-              <Text style={styles.logoEmblemIcon}>🕌</Text>
+              <Image source={Logo} style={styles.logo} />
             </View>
             <Text style={styles.logoBadgeText}>Madaris Logo</Text>
           </View>
@@ -273,9 +372,11 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </View>
 
-          {/* Right: 4 Branches Pill */}
+          {/* Right: Live Students Count Pill */}
           <View style={styles.branchesBadge}>
-            <Text style={styles.branchesBadgeText}>{branchCount}</Text>
+            <Text style={styles.branchesBadgeText}>
+              {talabaCountLoaded ? `${totalTalaba} Talaba` : '...'}
+            </Text>
           </View>
         </TouchableOpacity>
 
@@ -306,7 +407,9 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               </View>
 
               <Text style={styles.cardCategoryLabel}>TALABA</Text>
-              <Text style={styles.cardBigNumber}>1,482</Text>
+              <Text style={styles.cardBigNumber}>
+                {talabaCountLoaded ? totalTalaba.toLocaleString() : '...'}
+              </Text>
               <Text style={styles.cardSubtext}>Active Talaba</Text>
             </TouchableOpacity>
 
@@ -325,7 +428,9 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               </View>
 
               <Text style={styles.cardCategoryLabel}>ASATEZA</Text>
-              <Text style={styles.cardBigNumber}>64</Text>
+              <Text style={styles.cardBigNumber}>
+                {talabaCountLoaded ? totalTeachers.toLocaleString() : '...'}
+              </Text>
               <Text style={styles.cardSubtext}>Faculty Members</Text>
             </TouchableOpacity>
           </View>
@@ -347,7 +452,9 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               </View>
 
               <Text style={styles.cardCategoryLabel}>WALIDAIN</Text>
-              <Text style={styles.cardBigNumber}>1,120</Text>
+              <Text style={styles.cardBigNumber}>
+                {talabaCountLoaded ? totalParents.toLocaleString() : '...'}
+              </Text>
               <Text style={styles.cardSubtext}>Registered Guardians</Text>
             </TouchableOpacity>
 
@@ -375,7 +482,9 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               </View>
 
               <Text style={styles.cardCategoryLabel}>DARJAAT</Text>
-              <Text style={styles.cardBigNumber}>36</Text>
+              <Text style={styles.cardBigNumber}>
+                {talabaCountLoaded ? totalClasses.toLocaleString() : '...'}
+              </Text>
               <Text style={styles.cardSubtext}>Active Sections</Text>
             </TouchableOpacity>
           </View>
@@ -806,8 +915,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
                   selectedJurisdiction.includes(b.code) && styles.sheetOptionActive,
                 ]}
                 onPress={() => {
-                  setSelectedJurisdiction(`${b.name.slice(0, 24)}...`);
-                  setBranchCount(`${b.talaba} Talaba`);
+                  setSelectedJurisdiction(b.name);
                   setBranchModalVisible(false);
                 }}
               >
@@ -847,20 +955,28 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
             </Text>
 
             <View style={styles.notifItem}>
-              <Text style={styles.notifDot}>🔴</Text>
+              <Text style={styles.notifDot}>{pendingTalabaCount > 0 ? '🔴' : '🟢'}</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.notifTitle}>18 Pending Dakhla Applications</Text>
-                <Text style={styles.notifBody}>Awaiting your final verification & admission approval.</Text>
-                <Text style={styles.notifTime}>10 mins ago</Text>
+                <Text style={styles.notifTitle}>
+                  {pendingTalabaCount} Pending Approvals
+                </Text>
+                <Text style={styles.notifBody}>
+                  {pendingTalabaCount > 0
+                    ? 'Awaiting your final verification & admission approval.'
+                    : 'No pending registration approvals.'}
+                </Text>
               </View>
             </View>
 
             <View style={styles.notifItem}>
               <Text style={styles.notifDot}>🟢</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.notifTitle}>Daily Haziri: 98.4% Recorded</Text>
-                <Text style={styles.notifBody}>All 36 Darjaat attendance marked by Nazim-e-Taleem.</Text>
-                <Text style={styles.notifTime}>1 hour ago</Text>
+                <Text style={styles.notifTitle}>
+                  {totalClasses} Active Darjaat • {totalTeachers} Teachers
+                </Text>
+                <Text style={styles.notifBody}>
+                  {totalTalaba} total students and {totalParents} parents currently in database.
+                </Text>
               </View>
             </View>
 
@@ -919,11 +1035,11 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               style={styles.profileActionRow}
               onPress={() => {
                 setProfileModalVisible(false);
-                navigation.navigate('RegisterPage');
+                navigation.navigate('StudentAddScreen');
               }}
             >
               <Text style={styles.profileActionEmoji}>📝</Text>
-              <Text style={styles.profileActionLabel}>New Dakhla Form (Register)</Text>
+              <Text style={styles.profileActionLabel}>Add New Student</Text>
               <Text style={styles.profileActionArrow}>→</Text>
             </TouchableOpacity>
 
@@ -931,7 +1047,11 @@ export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
               style={[styles.profileActionRow, { borderBottomWidth: 0 }]}
               onPress={() => {
                 setProfileModalVisible(false);
-                navigation.navigate('LoginPinPage');
+                apiService.clearSession();
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'LoginPinPage' }],
+                });
               }}
             >
               <Text style={styles.profileActionEmoji}>🚪</Text>
@@ -987,6 +1107,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 6,
+  },
+  logo: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    resizeMode: 'cover',
   },
   logoEmblemIcon: {
     fontSize: 16,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,17 @@ import {
   Platform,
   Modal,
   TextInput,
+  Image,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { CustomInput } from '../components/CustomInput';
 import { CustomButton } from '../components/CustomButton';
 import { apiService } from '../services/api';
+import Logo from '../assets/img/logo-mms.png';
 
 type LoginPinPageNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -32,6 +36,23 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ identifier?: string; pin?: string }>({});
+
+  // Prevent hardware back button from navigating back into a logged-out session
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        onBackPress
+      );
+
+      return () => subscription.remove();
+    }, [])
+  );
 
   // API Config modal state
   const [configModalVisible, setConfigModalVisible] = useState(false);
@@ -60,52 +81,11 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
     );
   };
 
-  // Check if credentials match static Super Admin
-  const checkIsStaticSuperAdmin = (id: string, p: string) => {
-    const cleanId = id.trim().toLowerCase();
-    const cleanPin = p.trim();
-
-    const isMatchId =
-      cleanId === 'superadmin' ||
-      cleanId === 'admin' ||
-      cleanId === 'super admin' ||
-      cleanId === 'muhtamim' ||
-      cleanId === '00000-0000000-0' ||
-      cleanId === '0000000000000' ||
-      cleanId === '03000000000' ||
-      cleanId === '99999-9999999-9';
-
-    if (isMatchId) {
-      if (
-        cleanPin === '1234' ||
-        cleanPin === '0000' ||
-        cleanPin === '7860' ||
-        cleanId.includes('superadmin')
-      ) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const handleSuperAdminDirectLogin = () => {
-    navigation.navigate('SuperAdminDashboard', {
-      userName: 'Hazrat Maulana Muhtamim Sahib',
-      role: 'SuperAdmin',
-    });
-  };
-
-  const handleAutoFillSuperAdmin = () => {
-    setIdentifier('superadmin');
-    setPin('1234');
-    setErrors({});
-  };
-
   const handleLogin = async () => {
     const newErrors: { identifier?: string; pin?: string } = {};
 
     if (!identifier.trim()) {
-      newErrors.identifier = 'Please enter CNIC or Mobile Number';
+      newErrors.identifier = 'Please enter Username, CNIC, or Mobile Number';
     }
     if (!pin) {
       newErrors.pin = '4-Digit PIN is required';
@@ -119,16 +99,6 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
     }
 
     setErrors({});
-
-    // ⚡ Instant Static Super Admin Check: Direct navigation without alert or backend dependency
-    if (checkIsStaticSuperAdmin(identifier, pin)) {
-      navigation.navigate('SuperAdminDashboard', {
-        userName: 'Hazrat Maulana Muhtamim Sahib',
-        role: 'SuperAdmin',
-      });
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -136,52 +106,94 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
       setLoading(false);
 
       if (res.success) {
+        const resolvedRole = (
+          res.role ||
+          res.user?.role ||
+          (res.data as any)?.role ||
+          (res.data as any)?.user?.role ||
+          res.student?.role ||
+          'student'
+        ).toLowerCase();
         const isSuperAdmin =
-          res.role === 'superadmin' ||
-          res.student?.role === 'superadmin' ||
-          identifier.toLowerCase().includes('superadmin') ||
-          identifier.trim() === '00000-0000000-0';
+          resolvedRole === 'superadmin' || resolvedRole === 'admin';
 
-        const displayName = isSuperAdmin
-          ? 'Hazrat Maulana Muhtamim Sahib'
-          : res.student
-          ? `${res.student.firstName} ${res.student.lastName}`
-          : 'Maulana Abdul Rahman';
+        const displayName =
+          res.user?.name ||
+          (res.data as any)?.user?.name ||
+          res.teacher?.name ||
+          res.parent?.name ||
+          res.student?.fullName ||
+          (res.student
+            ? `${res.student.firstName || ''} ${res.student.lastName || ''}`.trim()
+            : '') ||
+          (isSuperAdmin ? 'Hazrat Maulana Muhtamim Sahib' : 'Talib-e-Ilm');
 
-        // Direct navigation for Super Admin (no alert dialog)
+        // Direct navigation when matched in the `users` table as SuperAdmin / Admin
         if (isSuperAdmin) {
-          navigation.navigate('SuperAdminDashboard', {
-            userName: displayName,
-            role: 'SuperAdmin',
+          apiService.setSessionRole(resolvedRole);
+          apiService.setCurrentStudent(null);
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'SuperAdminDashboard',
+                params: {
+                  userName: displayName,
+                  role: resolvedRole === 'admin' ? 'Admin' : 'SuperAdmin',
+                },
+              },
+            ],
           });
           return;
         }
 
-        Alert.alert(
-          'Login Successful! 🔓',
-          `Welcome back! ${res.message || 'Authenticated successfully with PIN.'}`,
-          [
+        if (resolvedRole === 'teacher') {
+          apiService.setSessionRole('teacher');
+          apiService.setCurrentStudent(null);
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'TeacherPortalScreen',
+                params: { teacher: res.teacher },
+              },
+            ],
+          });
+          return;
+        }
+
+        if (resolvedRole === 'parent') {
+          apiService.setSessionRole('parent');
+          apiService.setCurrentStudent(null);
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'ParentPortalScreen',
+                params: { token: res.token, parent: res.parent },
+              },
+            ],
+          });
+          return;
+        }
+
+        // Student login: keep strict 'student' role and store only this student's profile
+        apiService.setSessionRole('student');
+        apiService.setCurrentStudent(res.student || null);
+        navigation.reset({
+          index: 0,
+          routes: [
             {
-              text: 'Open Dashboard',
-              onPress: () => {
-                navigation.navigate('DashboardScreen', {
-                  userName: displayName,
-                  role: 'NAZIM-E-TALEEM PORTAL',
-                });
+              name: 'DashboardScreen',
+              params: {
+                userName: displayName,
+                role: 'student',
+                student: res.student,
               },
             },
-          ]
-        );
+          ],
+        });
       } else {
-        // Fallback for superadmin keyword
-        if (identifier.toLowerCase().includes('superadmin')) {
-          navigation.navigate('SuperAdminDashboard', {
-            userName: 'Hazrat Maulana Muhtamim Sahib',
-            role: 'SuperAdmin',
-          });
-          return;
-        }
-
         Alert.alert(
           'Login Failed',
           res.message || 'Invalid PIN or credentials. Please try again.'
@@ -189,14 +201,6 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
       }
     } catch (err: any) {
       setLoading(false);
-      // Fallback if backend is offline and user attempted superadmin login
-      if (identifier.toLowerCase().includes('superadmin')) {
-        navigation.navigate('SuperAdminDashboard', {
-          userName: 'Hazrat Maulana Muhtamim Sahib',
-          role: 'SuperAdmin',
-        });
-        return;
-      }
       Alert.alert('Error', err.message || 'Failed to authenticate');
     }
   };
@@ -212,19 +216,9 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Top Bar with optional Back and API Config Settings */}
+          {/* Top Bar with API Config Settings */}
           <View style={styles.topBar}>
-            {navigation.canGoBack() ? (
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={() => navigation.goBack()}
-              >
-                <Text style={styles.backBtnText}>← Back</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.topPlaceholder} />
-            )}
-
+            <View style={styles.topPlaceholder} />
             <TouchableOpacity
               style={styles.settingsBtn}
               onPress={handleOpenConfig}
@@ -235,19 +229,19 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
 
           {/* Logo */}
           <View style={styles.logoContainer}>
-            <Text style={styles.logoEmblem}>🕌</Text>
+            <Image source={Logo} style={styles.logo} />
           </View>
 
           <Text style={styles.title}>Madaris Management</Text>
           <Text style={styles.subtitle}>
-            Enter your registered CNIC/Mobile and your 4-digit PIN to access your student account.
+            Enter your registered Username, CNIC, or Mobile No and 4-digit PIN to sign in.
           </Text>
 
           {/* Login Form */}
           <View style={styles.card}>
             <CustomInput
-              label="CNIC or Guardian Mobile No"
-              placeholder="e.g. 12345-6789012-3 or 03001234567"
+              label="Username, CNIC, or Mobile No"
+              placeholder="e.g. superadmin, 12345-6789012-3, or 03001234567"
               value={identifier}
               onChangeText={setIdentifier}
               error={errors.identifier}
@@ -281,68 +275,6 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
               style={{ marginTop: 6 }}
             />
 
-            {/* Quick Super Admin Static Login Access */}
-            <View style={styles.superAdminAccessBox}>
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>SUPER ADMIN STATIC LOGIN</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.superAdminCard}>
-                <View style={styles.superAdminCardHeader}>
-                  <View style={styles.superAdminIconCircle}>
-                    <Text style={styles.superAdminBtnShield}>🛡️</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.superAdminTitleRow}>
-                      <Text style={styles.superAdminBtnTitle}>
-                        SuperAdmin Console
-                      </Text>
-                      <View style={styles.staticBadge}>
-                        <Text style={styles.staticBadgeText}>STATIC</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.superAdminBtnSubtitle}>
-                      Markazi Idara • Muhtamim Portal
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Static Credentials Pills */}
-                <View style={styles.credentialsBox}>
-                  <View style={styles.credentialRow}>
-                    <Text style={styles.credentialLabel}>CNIC/ID:</Text>
-                    <Text style={styles.credentialValue}>superadmin</Text>
-                  </View>
-                  <View style={styles.credentialDivider} />
-                  <View style={styles.credentialRow}>
-                    <Text style={styles.credentialLabel}>PIN:</Text>
-                    <Text style={styles.credentialValue}>1234</Text>
-                  </View>
-                </View>
-
-                {/* Actions: Auto-Fill and Direct Login */}
-                <View style={styles.superAdminActionsRow}>
-                  <TouchableOpacity
-                    style={styles.autoFillBtn}
-                    activeOpacity={0.8}
-                    onPress={handleAutoFillSuperAdmin}
-                  >
-                    <Text style={styles.autoFillBtnText}>✍️ Auto-Fill</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.directLoginBtn}
-                    activeOpacity={0.85}
-                    onPress={handleSuperAdminDirectLogin}
-                  >
-                    <Text style={styles.directLoginBtnText}>⚡ Direct Login →</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
             {/* Dedicated Portals Section */}
             <View style={styles.portalsContainer}>
               <TouchableOpacity
@@ -371,19 +303,6 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.portalCardSub}>
                     View child enrollment, monthly & yearly attendance reports
                   </Text>
-                </View>
-                <Text style={styles.portalCardArrow}>→</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.portalCardBtn, { marginTop: 10, borderColor: '#a7f3d0' }]}
-                onPress={() => navigation.navigate('RegisterPage')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.portalCardIcon}>📝</Text>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.portalCardTitle}>New Student Registration (نیا داخلہ)</Text>
-                  <Text style={styles.portalCardSub}>Online admission application form</Text>
                 </View>
                 <Text style={styles.portalCardArrow}>→</Text>
               </TouchableOpacity>
@@ -429,7 +348,7 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
                   style={[
                     styles.presetChipText,
                     tempUrl === 'http://localhost:5000' &&
-                      styles.presetChipTextActive,
+                    styles.presetChipTextActive,
                   ]}
                 >
                   🔌 USB Phone (localhost:5000)
@@ -446,7 +365,7 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
                   style={[
                     styles.presetChipText,
                     tempUrl === 'http://10.0.2.2:5000' &&
-                      styles.presetChipTextActive,
+                    styles.presetChipTextActive,
                   ]}
                 >
                   📱 Android Emulator (10.0.2.2:5000)
@@ -463,7 +382,7 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
                   style={[
                     styles.presetChipText,
                     tempUrl === 'http://192.168.1.9:5000' &&
-                      styles.presetChipTextActive,
+                    styles.presetChipTextActive,
                   ]}
                 >
                   📶 Wi-Fi LAN (192.168.1.9:5000)
@@ -496,6 +415,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
+  },
+  logo: {
+    width: 90,
+    height: 90,
   },
   scrollContent: {
     flexGrow: 1,
@@ -688,149 +611,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
-  },
-  superAdminAccessBox: {
-    marginTop: 20,
-    paddingTop: 12,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  dividerText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#9CA3AF',
-    paddingHorizontal: 10,
-    letterSpacing: 0.8,
-  },
-  superAdminCard: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1.5,
-    borderColor: '#86EFAC',
-    borderRadius: 16,
-    padding: 14,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  superAdminCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  superAdminIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#0F4433',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  superAdminBtnShield: {
-    fontSize: 18,
-  },
-  superAdminTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  superAdminBtnTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F4433',
-  },
-  staticBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginLeft: 6,
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-  },
-  staticBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#15803D',
-    letterSpacing: 0.5,
-  },
-  superAdminBtnSubtitle: {
-    fontSize: 11.5,
-    color: '#15803D',
-    marginTop: 1,
-  },
-  credentialsBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    marginBottom: 12,
-  },
-  credentialRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  credentialLabel: {
-    fontSize: 11.5,
-    color: '#6B7280',
-    marginRight: 5,
-    fontWeight: '600',
-  },
-  credentialValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F4433',
-  },
-  credentialDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#E5E7EB',
-  },
-  superAdminActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  autoFillBtn: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.2,
-    borderColor: '#059669',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  autoFillBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  directLoginBtn: {
-    flex: 1.3,
-    backgroundColor: '#0F4433',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  directLoginBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   portalsContainer: {
     marginTop: 18,

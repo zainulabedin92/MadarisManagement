@@ -13,6 +13,7 @@ import {
   Linking,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -33,61 +34,8 @@ const ROLES = [
   'General Teacher',
 ];
 
-const INITIAL_DEMO_TEACHERS: Teacher[] = [
-  {
-    _id: 'seed-t1',
-    name: 'Qari Tariq Jameel Sahib',
-    phone: '03001234567',
-    email: 'qari.tariq@mms.edu',
-    cnic: '42101-1122334-1',
-    role: 'Hifz Teacher',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: 'seed-t2',
-    name: 'Maulana Bilal Ahmad',
-    phone: '03219876543',
-    email: 'bilal.ahmad@mms.edu',
-    cnic: '35201-5566778-3',
-    role: 'Darse Nizami Teacher',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: 'seed-t3',
-    name: 'Sheikh Abdul Wahab',
-    phone: '03334445566',
-    email: 'wahab.sheikh@mms.edu',
-    cnic: '61101-7788990-5',
-    role: 'Head Teacher',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: 'seed-t4',
-    name: 'Qari Saeed-ur-Rehman',
-    phone: '03456677889',
-    email: 'saeed.rehman@mms.edu',
-    cnic: '37405-3344556-7',
-    role: 'Tajweed Teacher',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: 'seed-t5',
-    name: 'Maulana Zubair Usmani',
-    phone: '03125556677',
-    email: 'zubair.usmani@mms.edu',
-    cnic: '42201-9988776-9',
-    role: 'Nazra Teacher',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-];
-
 export const TeachersListScreen: React.FC<Props> = ({ navigation }) => {
-  const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_DEMO_TEACHERS);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,19 +43,30 @@ export const TeachersListScreen: React.FC<Props> = ({ navigation }) => {
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
+  // 3-dots Menu & Edit Teacher State
+  const [menuTeacher, setMenuTeacher] = useState<Teacher | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [editTeacher, setEditTeacher] = useState<Teacher | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editCnic, setEditCnic] = useState('');
+  const [editPin, setEditPin] = useState('');
+  const [editRole, setEditRole] = useState('Hifz Teacher');
+  const [editStatus, setEditStatus] = useState('Active');
+  const [actionLoading, setActionLoading] = useState(false);
+
   const fetchTeachers = useCallback(async () => {
     try {
       const res = await apiService.getTeachers();
-      if (res.success && res.teachers && res.teachers.length > 0) {
-        // Merge with seed demos ensuring uniqueness by phone
-        const phones = new Set(res.teachers.map((t) => t.phone));
-        const uniqueDemo = INITIAL_DEMO_TEACHERS.filter((d) => !phones.has(d.phone));
-        setTeachers([...res.teachers, ...uniqueDemo]);
+      if (res.success && Array.isArray(res.teachers)) {
+        setTeachers(res.teachers);
       } else {
-        setTeachers(INITIAL_DEMO_TEACHERS);
+        setTeachers([]);
       }
     } catch {
-      setTeachers(INITIAL_DEMO_TEACHERS);
+      setTeachers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -152,6 +111,110 @@ export const TeachersListScreen: React.FC<Props> = ({ navigation }) => {
     Linking.openURL(`mailto:${email}`).catch(() => {
       Alert.alert('Mail Failed', `Cannot open email client for ${email}.`);
     });
+  };
+
+  const handleOpenMenu = (teacher: Teacher) => {
+    setMenuTeacher(teacher);
+    setMenuVisible(true);
+  };
+
+  const handleOpenEdit = (teacher: Teacher) => {
+    setMenuVisible(false);
+    setEditTeacher(teacher);
+    setEditName(teacher.name || '');
+    setEditPhone(teacher.phone || '');
+    setEditEmail(teacher.email || '');
+    setEditCnic(teacher.cnic || '');
+    setEditPin('');
+    setEditRole(teacher.role || 'Hifz Teacher');
+    setEditStatus(teacher.status || 'Active');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editTeacher) return;
+    if (!editName.trim() || !editPhone.trim()) {
+      Alert.alert('Required Fields', 'Teacher Name and Phone are required.');
+      return;
+    }
+
+    if (editPin.trim() && !/^\d{4}$/.test(editPin.trim())) {
+      Alert.alert('Invalid PIN', 'Teacher 4-Digit Login PIN must be exactly 4 numeric digits.');
+      return;
+    }
+
+    const targetId = editTeacher._id || editTeacher.id;
+    if (!targetId) {
+      Alert.alert('Error', 'Invalid teacher identifier.');
+      return;
+    }
+
+    setActionLoading(true);
+    const updatedData: Partial<Teacher> & { pin?: string; password?: string } = {
+      name: editName.trim(),
+      phone: editPhone.trim(),
+      email: editEmail.trim() || undefined,
+      cnic: editCnic.trim() || undefined,
+      role: editRole,
+      status: editStatus,
+    };
+
+    if (editPin.trim()) {
+      updatedData.pin = editPin.trim();
+      updatedData.password = editPin.trim();
+    }
+
+    try {
+      const res = await apiService.updateTeacher(targetId, updatedData);
+      setActionLoading(false);
+      if (res.success) {
+        Alert.alert('Success', 'Teacher record updated successfully.');
+        setEditModalVisible(false);
+        setTeachers((prev) =>
+          prev.map((t) => ((t._id || t.id) === targetId ? { ...t, ...updatedData } : t))
+        );
+      } else {
+        Alert.alert('Update Failed', res.message || 'Could not update teacher.');
+      }
+    } catch (err: any) {
+      setActionLoading(false);
+      Alert.alert('Error', err.message || 'Failed to update teacher.');
+    }
+  };
+
+  const handleDeleteTeacher = (teacher: Teacher) => {
+    setMenuVisible(false);
+    const targetId = teacher._id || teacher.id;
+    const teacherName = teacher.name || 'this teacher';
+
+    Alert.alert(
+      'Delete Faculty Member?',
+      `Are you sure you want to delete "${teacherName}"? They will also be unassigned from any class.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!targetId) return;
+            try {
+              setActionLoading(true);
+              const res = await apiService.deleteTeacher(targetId);
+              setActionLoading(false);
+              if (res.success) {
+                Alert.alert('Deleted', `Teacher "${teacherName}" removed successfully.`);
+                setTeachers((prev) => prev.filter((t) => (t._id || t.id) !== targetId));
+              } else {
+                Alert.alert('Delete Failed', res.message || 'Could not delete teacher.');
+              }
+            } catch (err: any) {
+              setActionLoading(false);
+              Alert.alert('Error', err.message || 'Failed to delete teacher.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const filteredTeachers = teachers.filter((t) => {
@@ -204,6 +267,15 @@ export const TeachersListScreen: React.FC<Props> = ({ navigation }) => {
                   {isActive ? '● Active' : '○ Inactive'}
                 </Text>
               </View>
+              {/* 3 dots menu button */}
+              <TouchableOpacity
+                style={styles.moreOptionsBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                onPress={() => handleOpenMenu(item)}
+              >
+                <Text style={styles.moreOptionsIcon}>⋮</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.roleChip}>
@@ -455,6 +527,217 @@ export const TeachersListScreen: React.FC<Props> = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 3-DOTS ACTION SHEET MODAL */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.actionSheetOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.actionSheetContent}>
+            <View style={styles.actionSheetHeader}>
+              <View style={styles.actionSheetIndicator} />
+              <Text style={styles.actionSheetTitle} numberOfLines={1}>
+                {menuTeacher?.name}
+              </Text>
+              <Text style={styles.actionSheetSub}>
+                {menuTeacher?.role} • {menuTeacher?.phone}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetBtn}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (menuTeacher) handleOpenEdit(menuTeacher);
+              }}
+            >
+              <Text style={styles.actionSheetBtnIcon}>✏️</Text>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.actionSheetBtnText}>Edit Faculty (استاذ کی معلومات تبدیل کریں)</Text>
+                <Text style={styles.actionSheetBtnDesc}>Update name, phone, role, or active status</Text>
+              </View>
+              <Text style={styles.actionSheetArrow}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionSheetBtn, styles.actionSheetBtnDanger]}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (menuTeacher) handleDeleteTeacher(menuTeacher);
+              }}
+            >
+              <Text style={styles.actionSheetBtnIcon}>🗑️</Text>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.actionSheetBtnText, { color: '#DC2626' }]}>
+                  Delete Teacher (حذف کریں)
+                </Text>
+                <Text style={styles.actionSheetBtnDesc}>Remove faculty member & unassign from classes</Text>
+              </View>
+              <Text style={[styles.actionSheetArrow, { color: '#DC2626' }]}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              activeOpacity={0.8}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Text style={styles.actionSheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* EDIT TEACHER MODAL */}
+      <Modal
+        visible={editModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Edit Faculty Record</Text>
+                <Text style={styles.modalSubtitle}>استاذ محترم کی تفصیلات میں تبدیلی</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: 460, paddingHorizontal: 16 }}
+              contentContainerStyle={{ paddingVertical: 10 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.fieldLabel}>Teacher Full Name *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="e.g. Maulana Bilal Ahmad"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Phone Number *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+                placeholder="0300-1234567"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Email Address</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editEmail}
+                onChangeText={setEditEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="bilal@mms.edu"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>CNIC Number</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editCnic}
+                onChangeText={setEditCnic}
+                placeholder="42101-1122334-1"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Reset 4-Digit Login PIN (Optional)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editPin}
+                onChangeText={(val) => setEditPin(val.replace(/\D/g, '').slice(0, 4))}
+                keyboardType="numeric"
+                maxLength={4}
+                placeholder="New 4-digit PIN (leave empty to keep current)"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Designated Teaching Role</Text>
+              <View style={styles.rolesGrid}>
+                {ROLES.filter((r) => r !== 'All').map((role) => (
+                  <TouchableOpacity
+                    key={role}
+                    style={[styles.roleChipOption, editRole === role && styles.roleChipOptionActive]}
+                    onPress={() => setEditRole(role)}
+                  >
+                    <Text
+                      style={[
+                        styles.roleChipOptionText,
+                        editRole === role && styles.roleChipOptionTextActive,
+                      ]}
+                    >
+                      {role}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Duty Status</Text>
+              <View style={styles.statusToggleRow}>
+                <TouchableOpacity
+                  style={[styles.statusToggleBtn, editStatus === 'Active' && styles.statusToggleBtnActive]}
+                  onPress={() => setEditStatus('Active')}
+                >
+                  <Text style={[styles.statusToggleText, editStatus === 'Active' && styles.statusToggleTextActive]}>
+                    ● Active on Duty
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.statusToggleBtn, editStatus === 'Inactive' && styles.statusToggleBtnInactive]}
+                  onPress={() => setEditStatus('Inactive')}
+                >
+                  <Text style={[styles.statusToggleText, editStatus === 'Inactive' && styles.statusToggleTextInactive]}>
+                    ○ Inactive
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 10, padding: 16 }}>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 1, backgroundColor: '#E2E8F0' }]}
+                onPress={() => setEditModalVisible(false)}
+                disabled={actionLoading}
+              >
+                <Text style={[styles.modalActionBtnText, { color: '#475569' }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 2, backgroundColor: '#059669' }]}
+                onPress={handleSaveEdit}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalActionBtnText}>💾 Save Teacher</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -861,5 +1144,180 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  moreOptionsBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  moreOptionsIcon: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#475569',
+    lineHeight: 20,
+  },
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  actionSheetHeader: {
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  actionSheetIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    marginBottom: 10,
+  },
+  actionSheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionSheetSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  actionSheetBtnDanger: {
+    borderBottomColor: '#FEE2E2',
+  },
+  actionSheetBtnIcon: {
+    fontSize: 20,
+  },
+  actionSheetBtnText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  actionSheetBtnDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  actionSheetArrow: {
+    fontSize: 20,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  actionSheetCancelBtn: {
+    marginTop: 14,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  actionSheetCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  formInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  rolesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  roleChipOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  roleChipOptionActive: {
+    backgroundColor: '#059669',
+    borderColor: '#047857',
+  },
+  roleChipOptionText: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  roleChipOptionTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  statusToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  statusToggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  statusToggleBtnActive: {
+    backgroundColor: '#D1FAE5',
+    borderColor: '#059669',
+  },
+  statusToggleBtnInactive: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#DC2626',
+  },
+  statusToggleText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  statusToggleTextActive: {
+    color: '#065F46',
+    fontWeight: 'bold',
+  },
+  statusToggleTextInactive: {
+    color: '#B91C1C',
+    fontWeight: 'bold',
   },
 });

@@ -23,81 +23,8 @@ interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, any>;
 }
 
-const INITIAL_DEMO_CLASSES: ClassItem[] = [
-  {
-    _id: 'seed-c1',
-    name: 'Shoba-e-Tahfeez (Hifz) - Batch A',
-    section: 'A',
-    roomNumber: '101',
-    academicYear: '2026-2027',
-    status: 'Active',
-    classTeacher: {
-      name: 'Qari Tariq Jameel Sahib',
-      phone: '03001234567',
-      role: 'Hifz Teacher',
-      status: 'Active',
-    },
-  },
-  {
-    _id: 'seed-c2',
-    name: 'Shoba-e-Tahfeez (Hifz) - Batch B',
-    section: 'B',
-    roomNumber: '102',
-    academicYear: '2026-2027',
-    status: 'Active',
-    classTeacher: {
-      name: 'Qari Saeed-ur-Rehman',
-      phone: '03456677889',
-      role: 'Tajweed Teacher',
-      status: 'Active',
-    },
-  },
-  {
-    _id: 'seed-c3',
-    name: 'Dars-e-Nizami (Sanwiya Khasa)',
-    section: 'A',
-    roomNumber: '201',
-    academicYear: '2026-2027',
-    status: 'Active',
-    classTeacher: {
-      name: 'Maulana Bilal Ahmad',
-      phone: '03219876543',
-      role: 'Darse Nizami Teacher',
-      status: 'Active',
-    },
-  },
-  {
-    _id: 'seed-c4',
-    name: 'Tajweed & Qiraat Academy',
-    section: 'A',
-    roomNumber: '204',
-    academicYear: '2026-2027',
-    status: 'Active',
-    classTeacher: {
-      name: 'Qari Saeed-ur-Rehman',
-      phone: '03456677889',
-      role: 'Tajweed Teacher',
-      status: 'Active',
-    },
-  },
-  {
-    _id: 'seed-c5',
-    name: 'Nazra Quran & Ibtidaiyya',
-    section: 'C',
-    roomNumber: '105',
-    academicYear: '2026-2027',
-    status: 'Active',
-    classTeacher: {
-      name: 'Maulana Zubair Usmani',
-      phone: '03125556677',
-      role: 'Nazra Teacher',
-      status: 'Active',
-    },
-  },
-];
-
 export const ClassesListScreen: React.FC<Props> = ({ navigation }) => {
-  const [classes, setClasses] = useState<ClassItem[]>(INITIAL_DEMO_CLASSES);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -107,13 +34,13 @@ export const ClassesListScreen: React.FC<Props> = ({ navigation }) => {
   const fetchClasses = useCallback(async () => {
     try {
       const res = await apiService.getClasses();
-      if (res.success && res.classes && res.classes.length > 0) {
+      if (res.success && Array.isArray(res.classes)) {
         setClasses(res.classes);
       } else {
-        setClasses(INITIAL_DEMO_CLASSES);
+        setClasses([]);
       }
     } catch {
-      setClasses(INITIAL_DEMO_CLASSES);
+      setClasses([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -47,125 +47,35 @@ export const DARJAT_LIST = [
   { id: 'combo', title: 'Hifz & School Combo', urdu: 'حفظ و اسکول', icon: '🎒' },
 ];
 
-// Fallback demo students in case backend has few records or is offline
-const INITIAL_DEMO_STUDENTS: Student[] = [
-  {
-    _id: 'seed-1',
-    firstName: 'Muhammad',
-    lastName: 'Huzaifa',
-    fatherName: 'Hafiz Muhammad Tariq',
-    cnic: '42101-1234567-1',
-    guardianMobile: '03001234567',
-    guardianEmail: 'tariq.mms@example.com',
-    enrollmentProgram: 'Hifz-ul-Quran',
-    city: 'Karachi',
-    address: 'Sector 5-A, North Nazimabad, Karachi',
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    _id: 'seed-2',
-    firstName: 'Abdul',
-    lastName: 'Rehman',
-    fatherName: 'Maulana Shabbir Ahmad',
-    cnic: '35201-9876543-3',
-    guardianMobile: '03217654321',
-    guardianEmail: 'shabbir.ahmad@example.com',
-    enrollmentProgram: 'Dars-e-Nizami',
-    city: 'Lahore',
-    address: 'Darul Uloom Town, Raiwind Road, Lahore',
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    _id: 'seed-3',
-    firstName: 'Hamza',
-    lastName: 'Farooq',
-    fatherName: 'Farooq Azam',
-    cnic: '61101-5544332-5',
-    guardianMobile: '03335554433',
-    guardianEmail: 'farooq.azam@example.com',
-    enrollmentProgram: 'Nazra Quran',
-    city: 'Islamabad',
-    address: 'Street 14, G-9/2, Islamabad',
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 8).toISOString(),
-  },
-  {
-    _id: 'seed-4',
-    firstName: 'Usman',
-    lastName: 'Ghani',
-    fatherName: 'Qari Noor Muhammad',
-    cnic: '37405-8877665-7',
-    guardianMobile: '03456677889',
-    guardianEmail: 'noor.qari@example.com',
-    enrollmentProgram: 'Tajweed & Qirat',
-    city: 'Rawalpindi',
-    address: 'Near Jamia Masjid Noor, Saddar, Rawalpindi',
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 12).toISOString(),
-  },
-  {
-    _id: 'seed-5',
-    firstName: 'Zubair',
-    lastName: 'Ahmad',
-    fatherName: 'Muhammad Akram',
-    cnic: '38403-1122334-9',
-    guardianMobile: '03124455667',
-    guardianEmail: 'akram.zubair@example.com',
-    enrollmentProgram: 'Aalim Course',
-    city: 'Multan',
-    address: 'Mohallah Qasim Bela, Multan',
-    status: 'pending',
-    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-  },
-  {
-    _id: 'seed-6',
-    firstName: 'Talha',
-    lastName: 'Bilal',
-    fatherName: 'Bilal Hussain',
-    cnic: '42201-7788990-1',
-    guardianMobile: '03023344556',
-    guardianEmail: 'bilal.h@example.com',
-    enrollmentProgram: 'Hifz & School Combo',
-    city: 'Peshawar',
-    address: 'Kohat Road, Peshawar Cantt',
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 15).toISOString(),
-  },
-  {
-    _id: 'seed-7',
-    firstName: 'Saad',
-    lastName: 'Abdullah',
-    fatherName: 'Abdullah Jan',
-    cnic: '54400-3344556-3',
-    guardianMobile: '03367788990',
-    guardianEmail: 'jan.saad@example.com',
-    enrollmentProgram: 'Hifz-ul-Quran',
-    city: 'Quetta',
-    address: 'Brewery Road, Quetta',
-    status: 'pending',
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-  {
-    _id: 'seed-8',
-    firstName: 'Anas',
-    lastName: 'Muneer',
-    fatherName: 'Muneer Ahmad',
-    cnic: '34101-9988776-5',
-    guardianMobile: '03086655443',
-    guardianEmail: 'muneer.anas@example.com',
-    enrollmentProgram: 'Dars-e-Nizami',
-    city: 'Gujranwala',
-    address: 'Satellite Town, Gujranwala',
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 20).toISOString(),
-  },
-];
+const getStudentDisplayName = (student: Student | null | undefined): string => {
+  if (!student) return '';
+  const combined = `${student.firstName || ''} ${student.lastName || ''}`.trim();
+  return combined || student.fullName?.trim() || 'Student';
+};
+
+const getStudentProgram = (student: Student | null | undefined): string => {
+  if (!student) return '';
+  if (student.enrollmentProgram?.trim()) return student.enrollmentProgram.trim();
+  if (student.classId && typeof student.classId === 'object' && student.classId.name) {
+    return student.classId.name;
+  }
+  return '';
+};
+
+const getStudentCnic = (student: Student | null | undefined): string => {
+  if (!student) return '';
+  return student.cnic?.trim() || student.bFormNo?.trim() || '';
+};
 
 export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const initialDarja = route?.params?.filterDarja || 'All Darjat';
+
+  // Preserve existing session role ('teacher' | 'student' | 'parent' | 'superadmin'); only default if unset
+  if (!apiService.getSessionRole()) {
+    apiService.setSessionRole('superadmin');
+  }
+  const isStudentSession = apiService.isStudent();
 
   // Filters & Search
   const [selectedDarja, setSelectedDarja] = useState<string>(initialDarja);
@@ -173,7 +83,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Data & Loading
-  const [students, setStudents] = useState<Student[]>(INITIAL_DEMO_STUDENTS);
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -181,23 +91,42 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
+  // Student 3-dots Menu & Edit Modal
+  const [menuStudent, setMenuStudent] = useState<Student | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [editStudent, setEditStudent] = useState<Student | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+
+  // Edit form state
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editFatherName, setEditFatherName] = useState('');
+  const [editRollNo, setEditRollNo] = useState('');
+  const [editCnic, setEditCnic] = useState('');
+  const [editGuardianMobile, setEditGuardianMobile] = useState('');
+  const [editGuardianEmail, setEditGuardianEmail] = useState('');
+  const [editEnrollmentProgram, setEditEnrollmentProgram] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editStatus, setEditStatus] = useState('approved');
+  const [actionLoading, setActionLoading] = useState(false);
+
   // Fetch Students from backend
   const fetchStudents = useCallback(async () => {
     try {
-      const res = await apiService.getAllStudents();
-      if (res.success && res.students && res.students.length > 0) {
-        // Merge real backend students with demo seeds, removing duplicate CNICs
-        const existingCnics = new Set(res.students.map((s) => s.cnic?.trim()));
-        const uniqueDemo = INITIAL_DEMO_STUDENTS.filter(
-          (s) => !existingCnics.has(s.cnic?.trim())
-        );
-        setStudents([...res.students, ...uniqueDemo]);
-      } else {
-        setStudents(INITIAL_DEMO_STUDENTS);
+      if (apiService.isStudent()) {
+        const meRes = await apiService.getMyProfile().catch(() => null);
+        const ownStudent = meRes?.student || apiService.getCurrentStudent();
+        setStudents(ownStudent ? [ownStudent] : []);
+        return;
       }
-    } catch (err) {
-      // Fallback silently to initial demo records
-      setStudents(INITIAL_DEMO_STUDENTS);
+      const res = await apiService.getAllStudents();
+      if (res.success && Array.isArray(res.students)) {
+        setStudents(res.students);
+      } else {
+        setStudents([]);
+      }
+    } catch {
+      setStudents([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -226,7 +155,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
   const filteredStudents = students.filter((student) => {
     // 1. Darja Filter
     if (selectedDarja !== 'All Darjat' && selectedDarja !== 'all') {
-      const prog = student.enrollmentProgram?.toLowerCase() || '';
+      const prog = getStudentProgram(student).toLowerCase();
       const filterKey = selectedDarja.toLowerCase();
       // Match key words (e.g., 'hifz', 'dars', 'nazra', 'tajweed', 'aalim')
       const matchesDarja =
@@ -243,7 +172,12 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
 
     // 2. Status Filter
     if (statusFilter !== 'all') {
-      if (student.status?.toLowerCase() !== statusFilter) {
+      const normalizedStatus = student.status?.toLowerCase() || '';
+      if (statusFilter === 'approved') {
+        if (normalizedStatus !== 'approved' && normalizedStatus !== 'enrolled') {
+          return false;
+        }
+      } else if (normalizedStatus !== statusFilter) {
         return false;
       }
     }
@@ -251,9 +185,9 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
     // 3. Search Query
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
-      const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
+      const fullName = getStudentDisplayName(student).toLowerCase();
       const father = (student.fatherName || '').toLowerCase();
-      const cnic = (student.cnic || '').toLowerCase();
+      const cnic = getStudentCnic(student).toLowerCase();
       const mobile = (student.guardianMobile || '').toLowerCase();
       const city = (student.city || '').toLowerCase();
 
@@ -275,7 +209,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
     if (darjaTitle === 'All Darjat') return students.length;
     const filterKey = darjaTitle.toLowerCase();
     return students.filter((s) => {
-      const prog = (s.enrollmentProgram || '').toLowerCase();
+      const prog = getStudentProgram(s).toLowerCase();
       return (
         prog.includes(filterKey) ||
         (filterKey.includes('hifz') && prog.includes('hifz')) ||
@@ -293,6 +227,116 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
     setDetailModalVisible(true);
   };
 
+  const handleOpenMenu = (student: Student) => {
+    setMenuStudent(student);
+    setMenuVisible(true);
+  };
+
+  const handleOpenEdit = (student: Student) => {
+    setMenuVisible(false);
+    setEditStudent(student);
+    const fullParts = (student.fullName || '').trim().split(/\s+/).filter(Boolean);
+    setEditFirstName(student.firstName || fullParts[0] || '');
+    setEditLastName(student.lastName || fullParts.slice(1).join(' ') || '');
+    setEditFatherName(student.fatherName || '');
+    setEditRollNo(student.rollNo || '');
+    setEditCnic(getStudentCnic(student));
+    setEditGuardianMobile(student.guardianMobile || '');
+    setEditGuardianEmail(student.guardianEmail || '');
+    setEditEnrollmentProgram(getStudentProgram(student) || 'Hifz-ul-Quran');
+    setEditCity(student.city || '');
+    setEditStatus(student.status || 'approved');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editStudent) return;
+    if (!editFirstName.trim() || !editFatherName.trim()) {
+      Alert.alert('Required Fields', 'First Name and Father Name are required.');
+      return;
+    }
+
+    const targetId = editStudent._id || editStudent.id;
+    if (!targetId) {
+      Alert.alert('Error', 'Invalid student identifier.');
+      return;
+    }
+
+    setActionLoading(true);
+    const updatedData: Partial<Student> = {
+      firstName: editFirstName.trim(),
+      lastName: editLastName.trim(),
+      fullName: `${editFirstName.trim()} ${editLastName.trim()}`.trim(),
+      fatherName: editFatherName.trim(),
+      rollNo: editRollNo.trim() || undefined,
+      cnic: editCnic.trim() || undefined,
+      guardianMobile: editGuardianMobile.trim() || undefined,
+      guardianEmail: editGuardianEmail.trim() || undefined,
+      enrollmentProgram: editEnrollmentProgram.trim() || undefined,
+      city: editCity.trim() || undefined,
+      status: editStatus,
+    };
+
+    try {
+      const res = await apiService.updateStudent(targetId, updatedData);
+      setActionLoading(false);
+      if (res.success) {
+        Alert.alert('Success', 'Student record updated successfully.');
+        setEditModalVisible(false);
+        // Update local state
+        setStudents((prev) =>
+          prev.map((s) => {
+            const sId = s._id || s.id;
+            if (sId === targetId) {
+              return { ...s, ...updatedData };
+            }
+            return s;
+          })
+        );
+      } else {
+        Alert.alert('Update Failed', res.message || 'Could not update student.');
+      }
+    } catch (err: any) {
+      setActionLoading(false);
+      Alert.alert('Error', err.message || 'Failed to update student.');
+    }
+  };
+
+  const handleDeleteStudent = (student: Student) => {
+    setMenuVisible(false);
+    const targetId = student._id || student.id;
+    const studentName = getStudentDisplayName(student) || 'this student';
+
+    Alert.alert(
+      'Delete Student Record?',
+      `Are you sure you want to permanently delete "${studentName}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!targetId) return;
+            try {
+              setActionLoading(true);
+              const res = await apiService.deleteStudent(targetId);
+              setActionLoading(false);
+              if (res.success) {
+                Alert.alert('Deleted', `Student "${studentName}" deleted successfully.`);
+                setStudents((prev) => prev.filter((s) => (s._id || s.id) !== targetId));
+              } else {
+                Alert.alert('Delete Failed', res.message || 'Could not delete student.');
+              }
+            } catch (err: any) {
+              setActionLoading(false);
+              Alert.alert('Error', err.message || 'Failed to delete student.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleCallGuardian = (mobile?: string) => {
     if (!mobile) return;
     Linking.openURL(`tel:${mobile}`).catch(() => {
@@ -301,8 +345,13 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   const renderStudentCard = ({ item }: { item: Student }) => {
-    const isApproved = item.status === 'approved';
-    const initials = `${item.firstName?.[0] || 'M'}${item.lastName?.[0] || 'T'}`.toUpperCase();
+    const normalizedStatus = item.status?.toLowerCase() || '';
+    const isApproved = normalizedStatus === 'approved' || normalizedStatus === 'enrolled';
+    const displayName = getStudentDisplayName(item);
+    const nameParts = displayName.split(/\s+/).filter(Boolean);
+    const initials = `${nameParts[0]?.[0] || 'M'}${nameParts[1]?.[0] || 'T'}`.toUpperCase();
+    const displayCnic = getStudentCnic(item);
+    const displayProgram = getStudentProgram(item);
 
     return (
       <TouchableOpacity
@@ -320,13 +369,24 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View style={styles.nameRow}>
               <Text style={styles.studentName} numberOfLines={1}>
-                {item.firstName} {item.lastName}
+                {displayName}
               </Text>
               <View style={[styles.statusBadge, isApproved ? styles.statusBadgeApproved : styles.statusBadgePending]}>
                 <Text style={[styles.statusBadgeText, isApproved ? styles.statusTextApproved : styles.statusTextPending]}>
                   {isApproved ? '● Active' : '⏳ Pending'}
                 </Text>
               </View>
+              {/* 3-dots Menu Button (hidden for students) */}
+              {!isStudentSession && (
+                <TouchableOpacity
+                  style={styles.moreOptionsBtn}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  onPress={() => handleOpenMenu(item)}
+                >
+                  <Text style={styles.moreOptionsIcon}>⋮</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <Text style={styles.fatherName} numberOfLines={1}>
@@ -340,13 +400,15 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
           <View style={styles.darjaBadge}>
             <Text style={styles.darjaBadgeIcon}>📖</Text>
             <Text style={styles.darjaBadgeText} numberOfLines={1}>
-              {item.enrollmentProgram || 'General Madaris'}
+              {displayProgram || 'General Madaris'}
             </Text>
           </View>
 
-          <View style={styles.cnicBadge}>
-            <Text style={styles.cnicBadgeText}>{item.cnic}</Text>
-          </View>
+          {displayCnic ? (
+            <View style={styles.cnicBadge}>
+              <Text style={styles.cnicBadgeText}>{displayCnic}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Footer: City & Phone with Call Action */}
@@ -383,20 +445,26 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
         </TouchableOpacity>
 
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerMainTitle}>طلبہ ڈائریکٹری • Students</Text>
+          <Text style={styles.headerMainTitle}>
+            {isStudentSession ? 'میری معلومات • My Profile' : 'طلبہ ڈائریکٹری • Students'}
+          </Text>
           <Text style={styles.headerSubtitle}>
-            {filteredStudents.length} Talaba Registered
+            {isStudentSession
+              ? 'Your Personal Student Record'
+              : `${filteredStudents.length} Talaba Registered`}
           </Text>
         </View>
 
         {/* Header Add Student Button */}
-        <TouchableOpacity
-          style={styles.headerAddBtn}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('RegisterPage')}
-        >
-          <Text style={styles.headerAddBtnText}>+ Add</Text>
-        </TouchableOpacity>
+        {!isStudentSession && (
+          <TouchableOpacity
+            style={styles.headerAddBtn}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('RegisterPage')}
+          >
+            <Text style={styles.headerAddBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Search Input Bar */}
@@ -479,7 +547,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
           onPress={() => setStatusFilter('approved')}
         >
           <Text style={[styles.statusSegmentText, statusFilter === 'approved' && styles.statusSegmentTextActive]}>
-            Active / Approved ({students.filter((s) => s.status === 'approved').length})
+            Active / Approved ({students.filter((s) => s.status?.toLowerCase() === 'approved' || s.status?.toLowerCase() === 'enrolled').length})
           </Text>
         </TouchableOpacity>
 
@@ -520,29 +588,33 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={styles.emptySubtitle}>
                 No student records found in Darja "{selectedDarja}" matching your search criteria.
               </Text>
-              <TouchableOpacity
-                style={styles.emptyAddBtn}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('RegisterPage')}
-              >
-                <Text style={styles.emptyAddBtnText}>+ Add Student in this Darja</Text>
-              </TouchableOpacity>
+              {!isStudentSession && (
+                <TouchableOpacity
+                  style={styles.emptyAddBtn}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('RegisterPage')}
+                >
+                  <Text style={styles.emptyAddBtnText}>+ Add Student in this Darja</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
         />
       )}
 
       {/* Floating Action Button (FAB) to Add New Student */}
-      <TouchableOpacity
-        style={[styles.fabBtn, { bottom: Math.max(insets.bottom, 8) + 16 }]}
-        activeOpacity={0.88}
-        onPress={() => navigation.navigate('RegisterPage')}
-      >
-        <View style={styles.fabInner}>
-          <Text style={styles.fabIcon}>➕</Text>
-          <Text style={styles.fabText}>Add New Student</Text>
-        </View>
-      </TouchableOpacity>
+      {!isStudentSession && (
+        <TouchableOpacity
+          style={[styles.fabBtn, { bottom: Math.max(insets.bottom, 8) + 16 }]}
+          activeOpacity={0.88}
+          onPress={() => navigation.navigate('RegisterPage')}
+        >
+          <View style={styles.fabInner}>
+            <Text style={styles.fabIcon}>➕</Text>
+            <Text style={styles.fabText}>Add New Student</Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Student Profile Detail Modal */}
       <Modal
@@ -558,15 +630,15 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
               <View style={styles.modalHeaderLeft}>
                 <View style={styles.modalAvatarCircle}>
                   <Text style={styles.modalAvatarText}>
-                    {selectedStudent?.firstName?.[0] || 'M'}
+                    {getStudentDisplayName(selectedStudent)?.[0]?.toUpperCase() || 'M'}
                   </Text>
                 </View>
                 <View style={{ marginLeft: 12 }}>
                   <Text style={styles.modalStudentName}>
-                    {selectedStudent?.firstName} {selectedStudent?.lastName}
+                    {getStudentDisplayName(selectedStudent)}
                   </Text>
                   <Text style={styles.modalStudentRole}>
-                    Talib-e-Ilm • {selectedStudent?.enrollmentProgram}
+                    Talib-e-Ilm • {getStudentProgram(selectedStudent) || 'General Madaris'}
                   </Text>
                 </View>
               </View>
@@ -589,7 +661,7 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Full Name</Text>
                   <Text style={styles.detailVal}>
-                    {selectedStudent?.firstName} {selectedStudent?.lastName}
+                    {getStudentDisplayName(selectedStudent)}
                   </Text>
                 </View>
 
@@ -602,20 +674,20 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
 
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>CNIC / B-Form</Text>
-                  <Text style={styles.detailVal}>{selectedStudent?.cnic}</Text>
+                  <Text style={styles.detailVal}>{getStudentCnic(selectedStudent) || 'N/A'}</Text>
                 </View>
 
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Darja / Program</Text>
                   <Text style={[styles.detailVal, { color: '#0F4433', fontWeight: '700' }]}>
-                    {selectedStudent?.enrollmentProgram}
+                    {getStudentProgram(selectedStudent) || 'N/A'}
                   </Text>
                 </View>
 
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Approval Status</Text>
-                  <View style={[styles.statusBadge, selectedStudent?.status === 'approved' ? styles.statusBadgeApproved : styles.statusBadgePending]}>
-                    <Text style={[styles.statusBadgeText, selectedStudent?.status === 'approved' ? styles.statusTextApproved : styles.statusTextPending]}>
+                  <View style={[styles.statusBadge, (selectedStudent?.status?.toLowerCase() === 'approved' || selectedStudent?.status?.toLowerCase() === 'enrolled') ? styles.statusBadgeApproved : styles.statusBadgePending]}>
+                    <Text style={[styles.statusBadgeText, (selectedStudent?.status?.toLowerCase() === 'approved' || selectedStudent?.status?.toLowerCase() === 'enrolled') ? styles.statusTextApproved : styles.statusTextPending]}>
                       {selectedStudent?.status?.toUpperCase()}
                     </Text>
                   </View>
@@ -666,11 +738,11 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
                   const st = selectedStudent;
                   setDetailModalVisible(false);
                   if (st) {
-                    const stId = st._id || st.id || st.cnic;
-                    const stName = `${st.firstName || ''} ${st.lastName || ''}`.trim() || 'Student';
+                    const stId = st._id || st.id || getStudentCnic(st);
+                    const stName = getStudentDisplayName(st);
                     navigation.navigate('AttendanceScreen', {
                       initialTab: 'monthly',
-                      filterDarja: st.enrollmentProgram || 'All',
+                      filterDarja: getStudentProgram(st) || 'All',
                       studentId: stId,
                       studentName: stName,
                       role: 'superadmin',
@@ -689,11 +761,11 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
                   const st = selectedStudent;
                   setDetailModalVisible(false);
                   if (st) {
-                    const stId = st._id || st.id || st.cnic;
-                    const stName = `${st.firstName || ''} ${st.lastName || ''}`.trim() || 'Student';
+                    const stId = st._id || st.id || getStudentCnic(st);
+                    const stName = getStudentDisplayName(st);
                     navigation.navigate('AttendanceScreen', {
                       initialTab: 'yearly',
-                      filterDarja: st.enrollmentProgram || 'All',
+                      filterDarja: getStudentProgram(st) || 'All',
                       studentId: stId,
                       studentName: stName,
                       role: 'superadmin',
@@ -714,6 +786,245 @@ export const StudentsListScreen: React.FC<Props> = ({ navigation, route }) => {
             >
               <Text style={styles.modalActionBtnText}>Close Record</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 3-DOTS ACTION SHEET MODAL (Edit / Delete) */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.actionSheetOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.actionSheetContent}>
+            <View style={styles.actionSheetHeader}>
+              <View style={styles.actionSheetIndicator} />
+              <Text style={styles.actionSheetTitle} numberOfLines={1}>
+                {getStudentDisplayName(menuStudent)}
+              </Text>
+              <Text style={styles.actionSheetSub}>
+                Roll No: {menuStudent?.rollNo || 'N/A'} • {getStudentProgram(menuStudent) || 'General Madaris'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetBtn}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (menuStudent) handleOpenEdit(menuStudent);
+              }}
+            >
+              <Text style={styles.actionSheetBtnIcon}>✏️</Text>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.actionSheetBtnText}>Edit Student (ترمیم کریں)</Text>
+                <Text style={styles.actionSheetBtnDesc}>Modify personal, admission, or contact details</Text>
+              </View>
+              <Text style={styles.actionSheetArrow}>›</Text>
+            </TouchableOpacity>
+
+            {apiService.getSessionRole() !== 'teacher' && (
+              <TouchableOpacity
+                style={[styles.actionSheetBtn, styles.actionSheetBtnDanger]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (menuStudent) handleDeleteStudent(menuStudent);
+                }}
+              >
+                <Text style={styles.actionSheetBtnIcon}>🗑️</Text>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.actionSheetBtnText, { color: '#DC2626' }]}>
+                    Delete Student (حذف کریں)
+                  </Text>
+                  <Text style={styles.actionSheetBtnDesc}>Permanently remove student record from MMS</Text>
+                </View>
+                <Text style={[styles.actionSheetArrow, { color: '#DC2626' }]}>›</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              activeOpacity={0.8}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Text style={styles.actionSheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* EDIT STUDENT MODAL */}
+      <Modal
+        visible={editModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
+            {/* Edit Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalStudentName}>Edit Student Record</Text>
+                <Text style={styles.modalStudentRole}>طالب علم کی معلومات تبدیل کریں</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: 460 }}
+              contentContainerStyle={{ paddingVertical: 10 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.formSectionLabel}>PERSONAL INFO</Text>
+
+              <Text style={styles.fieldLabel}>First Name *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editFirstName}
+                onChangeText={setEditFirstName}
+                placeholder="e.g. Muhammad"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.fieldLabel}>Last Name</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editLastName}
+                onChangeText={setEditLastName}
+                placeholder="e.g. Huzaifa"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.fieldLabel}>Father Name *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editFatherName}
+                onChangeText={setEditFatherName}
+                placeholder="e.g. Abdul Rehman"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.fieldLabel}>Roll Number</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editRollNo}
+                onChangeText={setEditRollNo}
+                placeholder="e.g. MMS-101"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.fieldLabel}>CNIC / B-Form</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editCnic}
+                onChangeText={setEditCnic}
+                placeholder="e.g. 42101-1234567-1"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={[styles.formSectionLabel, { marginTop: 14 }]}>ACADEMIC & STATUS</Text>
+
+              <Text style={styles.fieldLabel}>Darja / Program</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editEnrollmentProgram}
+                onChangeText={setEditEnrollmentProgram}
+                placeholder="e.g. Hifz-ul-Quran"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.fieldLabel}>Status</Text>
+              <View style={styles.editStatusRow}>
+                {['approved', 'pending', 'Enrolled'].map((st) => (
+                  <TouchableOpacity
+                    key={st}
+                    style={[
+                      styles.editStatusChip,
+                      editStatus.toLowerCase() === st.toLowerCase() && styles.editStatusChipActive,
+                    ]}
+                    onPress={() => setEditStatus(st)}
+                  >
+                    <Text
+                      style={[
+                        styles.editStatusChipText,
+                        editStatus.toLowerCase() === st.toLowerCase() && styles.editStatusChipTextActive,
+                      ]}
+                    >
+                      {st}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.formSectionLabel, { marginTop: 14 }]}>CONTACT & ADDRESS</Text>
+
+              <Text style={styles.fieldLabel}>Guardian Mobile</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editGuardianMobile}
+                onChangeText={setEditGuardianMobile}
+                keyboardType="phone-pad"
+                placeholder="e.g. 03001234567"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.fieldLabel}>Guardian Email</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editGuardianEmail}
+                onChangeText={setEditGuardianEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="e.g. parent@example.com"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.fieldLabel}>City</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editCity}
+                onChangeText={setEditCity}
+                placeholder="e.g. Karachi"
+                placeholderTextColor="#94A3B8"
+              />
+            </ScrollView>
+
+            {/* Save Buttons */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 1, marginTop: 0, backgroundColor: '#E2E8F0' }]}
+                activeOpacity={0.8}
+                onPress={() => setEditModalVisible(false)}
+                disabled={actionLoading}
+              >
+                <Text style={[styles.modalActionBtnText, { color: '#475569' }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 2, marginTop: 0, backgroundColor: '#0F4433' }]}
+                activeOpacity={0.85}
+                onPress={handleSaveEdit}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalActionBtnText}>💾 Save Changes</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1251,5 +1562,151 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  moreOptionsBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  moreOptionsIcon: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#475569',
+    lineHeight: 20,
+  },
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  actionSheetHeader: {
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  actionSheetIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    marginBottom: 10,
+  },
+  actionSheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionSheetSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  actionSheetBtnDanger: {
+    borderBottomColor: '#FEE2E2',
+  },
+  actionSheetBtnIcon: {
+    fontSize: 20,
+  },
+  actionSheetBtnText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  actionSheetBtnDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  actionSheetArrow: {
+    fontSize: 20,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  actionSheetCancelBtn: {
+    marginTop: 14,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  actionSheetCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  formSectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  formInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  editStatusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  editStatusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  editStatusChipActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#059669',
+  },
+  editStatusChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  editStatusChipTextActive: {
+    color: '#047857',
+    fontWeight: '800',
   },
 });

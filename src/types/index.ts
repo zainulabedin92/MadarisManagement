@@ -29,6 +29,8 @@ export interface Teacher {
     | 'General Teacher'
     | string;
   status: 'Active' | 'Inactive' | string;
+  pin?: string;
+  password?: string;
   createdAt?: string;
 }
 
@@ -92,6 +94,7 @@ export interface AttendanceRecord {
   fatherName?: string;
   rollNo?: string;
   darja: string;
+  classId?: string;
   guardianMobile?: string;
   date: string; // YYYY-MM-DD
   status: AttendanceStatus;
@@ -151,10 +154,23 @@ export interface StudentYearlyReport {
   monthlyBreakdown: MonthlyBreakdownItem[];
 }
 
+export interface UserProfile {
+  _id?: string;
+  id?: string;
+  username?: string;
+  name?: string;
+  cnic?: string;
+  phone?: string;
+  email?: string;
+  role?: string;
+  status?: string;
+}
+
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
   data?: T;
+  user?: UserProfile;
   student?: Student;
   students?: Student[];
   teacher?: Teacher;
@@ -167,12 +183,19 @@ export interface ApiResponse<T = any> {
   token?: string;
   role?: string;
   error?: string;
+  /** true when served from local cache or saved to the offline queue */
+  offline?: boolean;
+  /** true when a write was queued locally and will sync later */
+  queued?: boolean;
   count?: number;
   isNewParentCreated?: boolean;
+  studentPin?: string;
+  teacherPin?: string;
   parentCredentials?: {
     name: string;
     phone: string;
     cnic: string;
+    defaultPin?: string;
     defaultPassword?: string;
     note?: string;
   };
@@ -182,8 +205,8 @@ export type RootStackParamList = {
   LoginPinPage: undefined;
   RegisterPage: undefined;
   AdminPendingPage: undefined;
-  DashboardScreen: { userName?: string; role?: string } | undefined;
-  DashboardPage: { userName?: string; role?: string } | undefined;
+  DashboardScreen: { userName?: string; role?: string; student?: Student } | undefined;
+  DashboardPage: { userName?: string; role?: string; student?: Student } | undefined;
   SuperAdminDashboard: { userName?: string; role?: string } | undefined;
   StudentsListScreen: { filterDarja?: string } | undefined;
   StudentAddScreen: undefined;
@@ -198,11 +221,12 @@ export type RootStackParamList = {
     | {
         initialTab?: 'mark' | 'history' | 'monthly' | 'yearly';
         filterDarja?: string;
+        classId?: string;
         className?: string;
         teacherName?: string;
         studentId?: string;
         studentName?: string;
-        role?: 'superadmin' | 'teacher' | 'parent';
+        role?: 'superadmin' | 'teacher' | 'parent' | 'student';
         readOnly?: boolean;
       }
     | undefined;

@@ -13,6 +13,7 @@ import {
   Linking,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,65 +24,37 @@ interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, any>;
 }
 
-const INITIAL_DEMO_PARENTS: Parent[] = [
-  {
-    _id: 'seed-p1',
-    name: 'Abdul Rehman',
-    phone: '03001234567',
-    cnic: '42101-1234567-1',
-    address: 'Sector 5-A, North Nazimabad, Karachi',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: 'seed-p2',
-    name: 'Haji Farooq Azam',
-    phone: '03214455667',
-    cnic: '35201-9988776-3',
-    address: 'Allama Iqbal Town, Lahore',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: 'seed-p3',
-    name: 'Muhammad Rizwan',
-    phone: '03335557788',
-    cnic: '61101-3344556-5',
-    address: 'Street 9, G-10/4, Islamabad',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    _id: 'seed-p4',
-    name: 'Dr. Irfanullah',
-    phone: '03459988776',
-    cnic: '17301-4455667-9',
-    address: 'University Town, Peshawar',
-    status: 'Active',
-    createdAt: new Date().toISOString(),
-  },
-];
-
 export const ParentsListScreen: React.FC<Props> = ({ navigation }) => {
-  const [parents, setParents] = useState<Parent[]>(INITIAL_DEMO_PARENTS);
+  const [parents, setParents] = useState<Parent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
+  // 3-dots Menu & Edit Parent State
+  const [menuParent, setMenuParent] = useState<Parent | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [editParent, setEditParent] = useState<Parent | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCnic, setEditCnic] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editStatus, setEditStatus] = useState('Active');
+  const [editPin, setEditPin] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+
   const fetchParents = useCallback(async () => {
     try {
       const res = await apiService.getAllParents();
-      if (res.success && res.parents && res.parents.length > 0) {
-        const phones = new Set(res.parents.map((p) => p.phone));
-        const uniqueDemo = INITIAL_DEMO_PARENTS.filter((d) => !phones.has(d.phone));
-        setParents([...res.parents, ...uniqueDemo]);
+      if (res.success && Array.isArray(res.parents)) {
+        setParents(res.parents);
       } else {
-        setParents(INITIAL_DEMO_PARENTS);
+        setParents([]);
       }
     } catch {
-      setParents(INITIAL_DEMO_PARENTS);
+      setParents([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -119,6 +92,102 @@ export const ParentsListScreen: React.FC<Props> = ({ navigation }) => {
     Linking.openURL(url).catch(() => {
       Alert.alert('WhatsApp Unavailable', 'WhatsApp is not installed on this device.');
     });
+  };
+
+  const handleOpenMenu = (parent: Parent) => {
+    setMenuParent(parent);
+    setMenuVisible(true);
+  };
+
+  const handleOpenEdit = (parent: Parent) => {
+    setMenuVisible(false);
+    setEditParent(parent);
+    setEditName(parent.name || '');
+    setEditPhone(parent.phone || '');
+    setEditCnic(parent.cnic || '');
+    setEditAddress(parent.address || '');
+    setEditStatus(parent.status || 'Active');
+    setEditPin('');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editParent) return;
+    if (!editName.trim() || !editPhone.trim() || !editCnic.trim()) {
+      Alert.alert('Required Fields', 'Parent Name, Phone, and CNIC are required.');
+      return;
+    }
+
+    const targetId = editParent._id || editParent.id;
+    if (!targetId) {
+      Alert.alert('Error', 'Invalid parent identifier.');
+      return;
+    }
+
+    setActionLoading(true);
+    const updatedData: Partial<Parent> & { password?: string; pin?: string } = {
+      name: editName.trim(),
+      phone: editPhone.trim(),
+      cnic: editCnic.trim(),
+      address: editAddress.trim() || undefined,
+      status: editStatus,
+    };
+    if (editPin.trim()) {
+      updatedData.pin = editPin.trim();
+      updatedData.password = editPin.trim();
+    }
+
+    try {
+      const res = await apiService.updateParent(targetId, updatedData);
+      setActionLoading(false);
+      if (res.success) {
+        Alert.alert('Success', 'Parent profile updated successfully.');
+        setEditModalVisible(false);
+        setParents((prev) =>
+          prev.map((p) => ((p._id || p.id) === targetId ? { ...p, ...updatedData } : p))
+        );
+      } else {
+        Alert.alert('Update Failed', res.message || 'Could not update parent.');
+      }
+    } catch (err: any) {
+      setActionLoading(false);
+      Alert.alert('Error', err.message || 'Failed to update parent.');
+    }
+  };
+
+  const handleDeleteParent = (parent: Parent) => {
+    setMenuVisible(false);
+    const targetId = parent._id || parent.id;
+    const parentName = parent.name || 'this guardian';
+
+    Alert.alert(
+      'Delete Parent Record?',
+      `Are you sure you want to delete "${parentName}"? Note: Parents with active enrolled children cannot be deleted until those children are re-assigned or removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!targetId) return;
+            try {
+              setActionLoading(true);
+              const res = await apiService.deleteParent(targetId);
+              setActionLoading(false);
+              if (res.success) {
+                Alert.alert('Deleted', `Parent "${parentName}" deleted successfully.`);
+                setParents((prev) => prev.filter((p) => (p._id || p.id) !== targetId));
+              } else {
+                Alert.alert('Delete Blocked', res.message || 'Could not delete parent.');
+              }
+            } catch (err: any) {
+              setActionLoading(false);
+              Alert.alert('Error', err.message || 'Failed to delete parent.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const filteredParents = parents.filter((p) => {
@@ -168,6 +237,15 @@ export const ParentsListScreen: React.FC<Props> = ({ navigation }) => {
                   {isActive ? '● Verified' : '○ Inactive'}
                 </Text>
               </View>
+              {/* 3 dots menu button */}
+              <TouchableOpacity
+                style={styles.moreOptionsBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                onPress={() => handleOpenMenu(item)}
+              >
+                <Text style={styles.moreOptionsIcon}>⋮</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.cnicRow}>
@@ -368,6 +446,196 @@ export const ParentsListScreen: React.FC<Props> = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 3-DOTS ACTION SHEET MODAL */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.actionSheetOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.actionSheetContent}>
+            <View style={styles.actionSheetHeader}>
+              <View style={styles.actionSheetIndicator} />
+              <Text style={styles.actionSheetTitle} numberOfLines={1}>
+                {menuParent?.name}
+              </Text>
+              <Text style={styles.actionSheetSub}>
+                CNIC: {menuParent?.cnic} • {menuParent?.phone}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetBtn}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (menuParent) handleOpenEdit(menuParent);
+              }}
+            >
+              <Text style={styles.actionSheetBtnIcon}>✏️</Text>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.actionSheetBtnText}>Edit Guardian (سرپرست کی معلومات تبدیل کریں)</Text>
+                <Text style={styles.actionSheetBtnDesc}>Update name, phone, CNIC, address, or 4-digit PIN</Text>
+              </View>
+              <Text style={styles.actionSheetArrow}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionSheetBtn, styles.actionSheetBtnDanger]}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (menuParent) handleDeleteParent(menuParent);
+              }}
+            >
+              <Text style={styles.actionSheetBtnIcon}>🗑️</Text>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.actionSheetBtnText, { color: '#DC2626' }]}>
+                  Delete Parent (حذف کریں)
+                </Text>
+                <Text style={styles.actionSheetBtnDesc}>Remove profile (only if no students linked)</Text>
+              </View>
+              <Text style={[styles.actionSheetArrow, { color: '#DC2626' }]}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              activeOpacity={0.8}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Text style={styles.actionSheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* EDIT PARENT MODAL */}
+      <Modal
+        visible={editModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Edit Guardian Profile</Text>
+                <Text style={styles.modalSubtitle}>سرپرست کی معلومات اور ۴ ہندسی پن تبدیل کریں</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: 460, paddingHorizontal: 16 }}
+              contentContainerStyle={{ paddingVertical: 10 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.fieldLabel}>Guardian Full Name *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="e.g. Abdul Rehman"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Mobile Phone *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+                placeholder="0300-1234567"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>CNIC Number *</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editCnic}
+                onChangeText={setEditCnic}
+                placeholder="42101-1234567-1"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Residential Address</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editAddress}
+                onChangeText={setEditAddress}
+                placeholder="e.g. Sector 5-A, North Nazimabad, Karachi"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Reset 4-Digit Portal PIN (Optional)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editPin}
+                onChangeText={setEditPin}
+                secureTextEntry
+                keyboardType="numeric"
+                maxLength={4}
+                placeholder="Leave blank to keep existing PIN (e.g. 1234)"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Account Status</Text>
+              <View style={styles.statusToggleRow}>
+                <TouchableOpacity
+                  style={[styles.statusToggleBtn, editStatus === 'Active' && styles.statusToggleBtnActive]}
+                  onPress={() => setEditStatus('Active')}
+                >
+                  <Text style={[styles.statusToggleText, editStatus === 'Active' && styles.statusToggleTextActive]}>
+                    ● Active
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.statusToggleBtn, editStatus === 'Inactive' && styles.statusToggleBtnInactive]}
+                  onPress={() => setEditStatus('Inactive')}
+                >
+                  <Text style={[styles.statusToggleText, editStatus === 'Inactive' && styles.statusToggleTextInactive]}>
+                    ○ Inactive
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 10, padding: 16 }}>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 1, backgroundColor: '#E2E8F0' }]}
+                onPress={() => setEditModalVisible(false)}
+                disabled={actionLoading}
+              >
+                <Text style={[styles.modalActionBtnText, { color: '#475569' }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { flex: 2, backgroundColor: '#059669' }]}
+                onPress={handleSaveEdit}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalActionBtnText}>💾 Save Guardian</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -731,5 +999,153 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  moreOptionsBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  moreOptionsIcon: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#475569',
+    lineHeight: 20,
+  },
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  actionSheetHeader: {
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  actionSheetIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    marginBottom: 10,
+  },
+  actionSheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionSheetSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  actionSheetBtnDanger: {
+    borderBottomColor: '#FEE2E2',
+  },
+  actionSheetBtnIcon: {
+    fontSize: 20,
+  },
+  actionSheetBtnText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  actionSheetBtnDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  actionSheetArrow: {
+    fontSize: 20,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  actionSheetCancelBtn: {
+    marginTop: 14,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  actionSheetCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  formInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  statusToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  statusToggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  statusToggleBtnActive: {
+    backgroundColor: '#D1FAE5',
+    borderColor: '#059669',
+  },
+  statusToggleBtnInactive: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#DC2626',
+  },
+  statusToggleText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  statusToggleTextActive: {
+    color: '#065F46',
+    fontWeight: 'bold',
+  },
+  statusToggleTextInactive: {
+    color: '#B91C1C',
+    fontWeight: 'bold',
   },
 });

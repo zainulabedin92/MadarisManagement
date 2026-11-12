@@ -26,6 +26,7 @@ import {
   StudentMonthlyReport,
   StudentYearlyReport,
   MonthlyBreakdownItem,
+  ClassItem,
 } from '../types';
 import { apiService } from '../services/api';
 import { DARJAT_LIST } from './StudentsListScreen';
@@ -44,114 +45,6 @@ interface Props {
   navigation: AttendanceScreenNavigationProp;
   route?: AttendanceScreenRouteProp;
 }
-
-// Fallback demo students so Attendance works out-of-the-box offline or online
-export const DEMO_ATTENDANCE_STUDENTS: Student[] = [
-  {
-    _id: 'att-stu-1',
-    rollNo: 'MMS-101',
-    firstName: 'Muhammad',
-    lastName: 'Huzaifa',
-    fullName: 'Muhammad Huzaifa',
-    fatherName: 'Abdul Rehman',
-    cnic: '42101-1234567-1',
-    guardianMobile: '03001234567',
-    enrollmentProgram: 'Hifz-ul-Quran',
-    city: 'Karachi',
-    status: 'approved',
-  },
-  {
-    _id: 'att-stu-2',
-    rollNo: 'MMS-102',
-    firstName: 'Abdullah',
-    lastName: 'Rehman',
-    fullName: 'Abdullah Rehman',
-    fatherName: 'Abdul Rehman',
-    cnic: '42101-7654321-2',
-    guardianMobile: '03001234567',
-    enrollmentProgram: 'Hifz-ul-Quran',
-    city: 'Karachi',
-    status: 'approved',
-  },
-  {
-    _id: 'att-stu-3',
-    rollNo: 'MMS-103',
-    firstName: 'Hamza',
-    lastName: 'Farooq',
-    fullName: 'Hamza Farooq',
-    fatherName: 'Haji Farooq Azam',
-    cnic: '35201-9988776-3',
-    guardianMobile: '03214455667',
-    enrollmentProgram: 'Dars-e-Nizami',
-    city: 'Lahore',
-    status: 'approved',
-  },
-  {
-    _id: 'att-stu-4',
-    rollNo: 'MMS-104',
-    firstName: 'Usman',
-    lastName: 'Ghani',
-    fullName: 'Usman Ghani',
-    fatherName: 'Muhammad Rizwan',
-    cnic: '61101-3344556-5',
-    guardianMobile: '03335557788',
-    enrollmentProgram: 'Tajweed & Qirat',
-    city: 'Islamabad',
-    status: 'approved',
-  },
-  {
-    _id: 'att-stu-5',
-    rollNo: 'MMS-105',
-    firstName: 'Zubair',
-    lastName: 'Ahmad',
-    fullName: 'Zubair Ahmad',
-    fatherName: 'Muhammad Akram',
-    cnic: '38403-1122334-9',
-    guardianMobile: '03124455667',
-    enrollmentProgram: 'Aalim Course',
-    city: 'Multan',
-    status: 'approved',
-  },
-  {
-    _id: 'att-stu-6',
-    rollNo: 'MMS-106',
-    firstName: 'Talha',
-    lastName: 'Bilal',
-    fullName: 'Talha Bilal',
-    fatherName: 'Bilal Hussain',
-    cnic: '42201-7788990-1',
-    guardianMobile: '03023344556',
-    enrollmentProgram: 'Hifz & School Combo',
-    city: 'Peshawar',
-    status: 'approved',
-  },
-  {
-    _id: 'att-stu-7',
-    rollNo: 'MMS-107',
-    firstName: 'Saad',
-    lastName: 'Abdullah',
-    fullName: 'Saad Abdullah',
-    fatherName: 'Abdullah Jan',
-    cnic: '54400-3344556-3',
-    guardianMobile: '03367788990',
-    enrollmentProgram: 'Hifz-ul-Quran',
-    city: 'Quetta',
-    status: 'approved',
-  },
-  {
-    _id: 'att-stu-8',
-    rollNo: 'MMS-108',
-    firstName: 'Anas',
-    lastName: 'Irfan',
-    fullName: 'Anas Irfan',
-    fatherName: 'Dr. Irfanullah',
-    cnic: '17301-4455667-9',
-    guardianMobile: '03459988776',
-    enrollmentProgram: 'Nazra Quran',
-    city: 'Peshawar',
-    status: 'approved',
-  },
-];
 
 const QUICK_REMARK_PRESETS = [
   'On Time / Regular',
@@ -253,77 +146,30 @@ export function getStudentDarja(s: Student): string {
   return 'Hifz-ul-Quran';
 }
 
+// Resolve a student's assigned Class ID (classId may be a raw ObjectId string or a populated object)
+export function getStudentClassId(s: Student): string | null {
+  const c = s.classId;
+  if (!c) return null;
+  if (typeof c === 'string') return c;
+  return c._id || c.id || null;
+}
+
+export function getClassItemId(c: ClassItem): string {
+  return c._id || c.id || c.name;
+}
+
+// e.g. "Hifz - Batch A • B"
+export function getClassLabel(c: ClassItem): string {
+  const section = (c.section || '').trim();
+  return section ? `${c.name} • ${section}` : c.name;
+}
+
 // Persistent in-memory store across screen navigations
 // Map of date (YYYY-MM-DD) -> Map of studentId -> AttendanceRecord
 export const ATTENDANCE_STORE: Record<string, Record<string, AttendanceRecord>> = {};
-let IS_STORE_SEEDED = false;
-
-export function ensureSeededStore(studentList: Student[]) {
-  const combined = [...studentList];
-  const existingNames = new Set(combined.map((s) => getStudentFullName(s).toLowerCase()));
-  DEMO_ATTENDANCE_STUDENTS.forEach((d) => {
-    if (!existingNames.has(getStudentFullName(d).toLowerCase())) {
-      combined.push(d);
-    }
-  });
-
-  const today = new Date();
-
-  // Seed dates across the current year (last 180 days, sampling working days) so both Monthly and Yearly reports have rich data
-  const daysToSeed = IS_STORE_SEEDED ? 15 : 150;
-
-  for (let offset = 0; offset <= daysToSeed; offset++) {
-    // Seed every day for the past 35 days, and 8 representative working days per month for earlier months in the year
-    if (offset > 35 && offset % 3 !== 0) continue;
-
-    const dt = new Date(today);
-    dt.setDate(today.getDate() - offset);
-    // Skip Fridays (Jumu'ah holiday in Madaris) except today
-    if (offset > 0 && dt.getDay() === 5) continue;
-
-    const dateKey = formatDateKey(dt);
-    if (!ATTENDANCE_STORE[dateKey]) {
-      ATTENDANCE_STORE[dateKey] = {};
-    }
-
-    combined.forEach((stu, idx) => {
-      const sid = getStudentId(stu, idx);
-      if (ATTENDANCE_STORE[dateKey][sid]) return;
-
-      const hash = (offset * 13 + idx * 7) % 20;
-      let status: AttendanceStatus = 'Present';
-      let remarks = '';
-
-      if (hash === 1 || hash === 14) {
-        status = 'Absent';
-        remarks = hash === 1 ? 'Uninformed Absence' : 'Sick / Fever';
-      } else if (hash === 5 || hash === 11) {
-        status = 'Leave';
-        remarks = hash === 5 ? 'Sick Leave (بیماری)' : 'Family Emergency (ضروری کام)';
-      }
-
-      ATTENDANCE_STORE[dateKey][sid] = {
-        id: `${dateKey}-${sid}`,
-        studentId: sid,
-        studentName: getStudentFullName(stu),
-        fatherName: stu.fatherName,
-        rollNo: stu.rollNo || `MMS-${101 + idx}`,
-        darja: getStudentDarja(stu),
-        guardianMobile: stu.guardianMobile,
-        date: dateKey,
-        status,
-        remarks,
-        markedBy: 'Class Teacher (Ustad)',
-        updatedAt: dt.toISOString(),
-      };
-    });
-  }
-
-  IS_STORE_SEEDED = true;
-}
 
 /**
- * Helper used by ParentPortalScreen and TeacherPortalScreen to quickly get a student's live attendance stats
+ * Helper used by ParentPortalScreen, DashboardScreen, and TeacherPortalScreen to get a student's recorded attendance stats
  */
 export function getQuickStudentAttendanceStats(student: Student): {
   todayStatus: AttendanceStatus;
@@ -334,7 +180,6 @@ export function getQuickStudentAttendanceStats(student: Student): {
   leaveDays: number;
   totalDays: number;
 } {
-  ensureSeededStore([student]);
   const todayKey = formatDateKey(new Date());
   const currentMonth = todayKey.slice(0, 7);
   const currentYear = todayKey.slice(0, 4);
@@ -372,8 +217,8 @@ export function getQuickStudentAttendanceStats(student: Student): {
   const yearTotal = yearPresent + yearAbsent + yearLeave;
   return {
     todayStatus,
-    monthlyPct: monthTotal > 0 ? Math.round((monthPresent / monthTotal) * 100) : 92,
-    yearlyPct: yearTotal > 0 ? Math.round((yearPresent / yearTotal) * 100) : 91,
+    monthlyPct: monthTotal > 0 ? Math.round((monthPresent / monthTotal) * 100) : 0,
+    yearlyPct: yearTotal > 0 ? Math.round((yearPresent / yearTotal) * 100) : 0,
     presentDays: yearPresent,
     absentDays: yearAbsent,
     leaveDays: yearLeave,
@@ -383,9 +228,10 @@ export function getQuickStudentAttendanceStats(student: Student): {
 
 export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const role = route?.params?.role || 'superadmin';
-  const isReadOnly = route?.params?.readOnly === true || role === 'parent';
+  const role = route?.params?.role || (apiService.isStudent() ? 'student' : 'superadmin');
+  const isReadOnly = route?.params?.readOnly === true || role === 'parent' || role === 'student';
   const initialDarja = route?.params?.filterDarja || 'All Darjat';
+  const initialClassId = route?.params?.classId || 'all';
   const classContextName = route?.params?.className;
   const teacherContextName = route?.params?.teacherName;
   const lockedStudentName = route?.params?.studentName;
@@ -403,12 +249,14 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   // Students list
-  const [students, setStudents] = useState<Student[]>(DEMO_ATTENDANCE_STUDENTS);
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
 
   // Shared Filters
   const [selectedDarja, setSelectedDarja] = useState<string>(initialDarja);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId);
   const [searchQuery, setSearchQuery] = useState<string>(lockedStudentName || '');
   const [studentFocusFilter, setStudentFocusFilter] = useState<string | null>(
     lockedStudentName || null
@@ -444,30 +292,40 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
   // Store version counter to trigger re-computation after saves
   const [storeVersion, setStoreVersion] = useState<number>(0);
 
-  // Load students & seed attendance store
+  // Load students for attendance
   const loadStudentsAndAttendance = useCallback(async () => {
     setLoading(true);
-    let mergedStudents = [...DEMO_ATTENDANCE_STUDENTS];
+    let loadedStudents: Student[] = [];
+    if (role === 'student' || apiService.isStudent()) {
+      const meRes = await apiService.getMyProfile().catch(() => null);
+      const own = meRes?.student || apiService.getCurrentStudent();
+      loadedStudents = own ? [own] : [];
+      setStudents(loadedStudents);
+      setLoading(false);
+      setStoreVersion((v) => v + 1);
+      return;
+    }
+    const [res, classesRes] = await Promise.all([
+      apiService.getAllStudents().catch(() => null),
+      apiService.getClasses().catch(() => null),
+    ]);
     try {
-      const res = await apiService.getAllStudents();
-      if (res.success && res.students && res.students.length > 0) {
-        const existingNames = new Set(
-          res.students.map((s) => getStudentFullName(s).toLowerCase())
-        );
-        const uniqueDemo = DEMO_ATTENDANCE_STUDENTS.filter(
-          (d) => !existingNames.has(getStudentFullName(d).toLowerCase())
-        );
-        mergedStudents = [...res.students, ...uniqueDemo];
+      if (res && res.success && Array.isArray(res.students)) {
+        loadedStudents = res.students;
       }
     } catch {
-      // Offline fallback to DEMO_ATTENDANCE_STUDENTS
+      loadedStudents = [];
     }
 
-    ensureSeededStore(mergedStudents);
-    setStudents(mergedStudents);
+    // Real Classes (Darjat sections) created by admin for the Class filter
+    if (classesRes && classesRes.success && Array.isArray(classesRes.classes)) {
+      setClasses(classesRes.classes);
+    }
+
+    setStudents(loadedStudents);
     setLoading(false);
     setStoreVersion((v) => v + 1);
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     loadStudentsAndAttendance();
@@ -515,6 +373,54 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
     [selectedDarja]
   );
 
+  // Class filter helpers
+  const selectedClass = useMemo(
+    () =>
+      selectedClassId === 'all'
+        ? null
+        : classes.find((c) => getClassItemId(c) === selectedClassId) || null,
+    [classes, selectedClassId]
+  );
+
+  // Number of students per class (for chip badges)
+  const classStudentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    students.forEach((stu) => {
+      const cid = getStudentClassId(stu);
+      if (cid) counts[cid] = (counts[cid] || 0) + 1;
+    });
+    return counts;
+  }, [students]);
+
+  // Student IDs belonging to the selected class (used to filter stored attendance records)
+  const classStudentIds = useMemo(() => {
+    if (selectedClassId === 'all') return null;
+    const ids = new Set<string>();
+    students.forEach((stu, idx) => {
+      if (getStudentClassId(stu) === selectedClassId) ids.add(getStudentId(stu, idx));
+    });
+    return ids;
+  }, [students, selectedClassId]);
+
+  const matchesClassFilterRecord = useCallback(
+    (rec: AttendanceRecord) => {
+      if (!classStudentIds) return true;
+      return classStudentIds.has(rec.studentId) || rec.classId === selectedClassId;
+    },
+    [classStudentIds, selectedClassId]
+  );
+
+  // Human readable label of the active Darja / Class filter
+  const filterContextLabel = useMemo(() => {
+    if (classContextName) return classContextName;
+    const darjaIsAll = selectedDarja === 'All Darjat' || selectedDarja === 'all';
+    if (selectedClass) {
+      const classLabel = getClassLabel(selectedClass);
+      return darjaIsAll ? classLabel : `${selectedDarja} • ${classLabel}`;
+    }
+    return selectedDarja;
+  }, [classContextName, selectedDarja, selectedClass]);
+
   // Filtered students
   const filteredStudents = useMemo(() => {
     return students.filter((stu, idx) => {
@@ -531,6 +437,10 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
       const darja = getStudentDarja(stu);
       if (!matchesDarjaFilter(darja)) return false;
 
+      if (selectedClassId !== 'all' && getStudentClassId(stu) !== selectedClassId) {
+        return false;
+      }
+
       if (searchQuery.trim() && !studentFocusFilter) {
         const q = searchQuery.trim().toLowerCase();
         const name = fullName.toLowerCase();
@@ -543,7 +453,14 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
       }
       return true;
     });
-  }, [students, matchesDarjaFilter, searchQuery, studentFocusFilter, lockedStudentId]);
+  }, [
+    students,
+    matchesDarjaFilter,
+    selectedClassId,
+    searchQuery,
+    studentFocusFilter,
+    lockedStudentId,
+  ]);
 
   // Step date backward or forward
   const handleShiftDate = (daysDelta: number) => {
@@ -620,6 +537,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
         fatherName: stu.fatherName,
         rollNo: stu.rollNo || `MMS-${101 + idx}`,
         darja: getStudentDarja(stu),
+        classId: getStudentClassId(stu) || undefined,
         guardianMobile: stu.guardianMobile,
         date: selectedDate,
         status: entry.status,
@@ -635,6 +553,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
       await apiService.saveAttendance({
         date: selectedDate,
         darja: classContextName || selectedDarja,
+        classId: selectedClassId !== 'all' ? selectedClassId : undefined,
         records: recordsToSave,
       });
     } catch {
@@ -656,7 +575,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
 
     Alert.alert(
       'Haziri Saved ✅ (حاضری محفوظ ہو گئی)',
-      `Date: ${formatReadableDate(selectedDate)}\nClass/Darja: ${classContextName || selectedDarja}\nMarked By: ${markerName}\n\n• Present (حاضر): ${presentCount}\n• Absent (غیر حاضر): ${absentCount}\n• Leave (رخصت): ${leaveCount}`,
+      `Date: ${formatReadableDate(selectedDate)}\nClass/Darja: ${filterContextLabel}\nMarked By: ${markerName}\n\n• Present (حاضر): ${presentCount}\n• Absent (غیر حاضر): ${absentCount}\n• Leave (رخصت): ${leaveCount}`,
       [
         { text: 'Stay Here', style: 'cancel' },
         {
@@ -702,7 +621,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
           if (studentFocusFilter) {
             return r.studentName.toLowerCase() === studentFocusFilter.toLowerCase();
           }
-          return matchesDarjaFilter(r.darja);
+          return matchesDarjaFilter(r.darja) && matchesClassFilterRecord(r);
         });
         const total = records.length;
         const present = records.filter((r) => r.status === 'Present').length;
@@ -712,7 +631,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
 
         return {
           date: dateKey,
-          darja: classContextName || selectedDarja,
+          darja: filterContextLabel,
           total,
           present,
           absent,
@@ -721,7 +640,13 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
         };
       })
       .filter((s) => s.total > 0);
-  }, [matchesDarjaFilter, selectedDarja, classContextName, studentFocusFilter, storeVersion]);
+  }, [
+    matchesDarjaFilter,
+    matchesClassFilterRecord,
+    filterContextLabel,
+    studentFocusFilter,
+    storeVersion,
+  ]);
 
   const flattenedHistoryRecords = useMemo((): AttendanceRecord[] => {
     const dates = Object.keys(ATTENDANCE_STORE).sort((a, b) => (a < b ? 1 : -1));
@@ -732,7 +657,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
       Object.values(mapForDate).forEach((rec) => {
         if (studentFocusFilter) {
           if (rec.studentName.toLowerCase() !== studentFocusFilter.toLowerCase()) return;
-        } else if (!matchesDarjaFilter(rec.darja)) {
+        } else if (!matchesDarjaFilter(rec.darja) || !matchesClassFilterRecord(rec)) {
           return;
         }
         if (historyStatusFilter !== 'All' && rec.status !== historyStatusFilter) return;
@@ -748,7 +673,14 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
     });
 
     return list;
-  }, [matchesDarjaFilter, historyStatusFilter, searchQuery, studentFocusFilter, storeVersion]);
+  }, [
+    matchesDarjaFilter,
+    matchesClassFilterRecord,
+    historyStatusFilter,
+    searchQuery,
+    studentFocusFilter,
+    storeVersion,
+  ]);
 
   // ==========================================
   // COMPUTED MONTHLY REPORT DATA (TAB 3)
@@ -1076,8 +1008,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
               status === 'Present'
                 ? styles.avatarPresent
                 : status === 'Absent'
-                ? styles.avatarAbsent
-                : styles.avatarLeave,
+                  ? styles.avatarAbsent
+                  : styles.avatarLeave,
             ]}
           >
             <Text style={styles.avatarText}>
@@ -1211,15 +1143,15 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
             {isReadOnly
               ? 'طالب علم حاضری رپورٹ • Attendance Report'
               : classContextName
-              ? `${classContextName}`
-              : 'حاضری رجسٹر • Attendance'}
+                ? `${classContextName}`
+                : 'حاضری رجسٹر • Attendance'}
           </Text>
           <Text style={styles.headerSubtitle} numberOfLines={1}>
             {isReadOnly
               ? `Parent View • ${studentFocusFilter || 'Student Report'}`
               : teacherContextName
-              ? `Ustad: ${teacherContextName} • Mark & View Reports`
-              : 'Daily Haziri, History, Monthly & Yearly Reports'}
+                ? `Ustad: ${teacherContextName} • Mark & View Reports`
+                : 'Daily Haziri, History, Monthly & Yearly Reports'}
           </Text>
         </View>
 
@@ -1346,6 +1278,42 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
               );
             })}
           </ScrollView>
+
+          {/* CLASS FILTER CHIPS (real classes from /api/classes) */}
+          {classes.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.classScrollContent}
+            >
+              <Text style={styles.classFilterLabel}>CLASS:</Text>
+              {[
+                { id: 'all', label: 'All Classes', count: undefined as number | undefined },
+                ...classes.map((c) => {
+                  const cid = getClassItemId(c);
+                  return { id: cid, label: getClassLabel(c), count: classStudentCounts[cid] || 0 };
+                }),
+              ].map((opt) => {
+                const isSelected = selectedClassId === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.classChip, isSelected && styles.classChipActive]}
+                    onPress={() => setSelectedClassId(opt.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.darjaChipIcon}>{opt.id === 'all' ? '🏫' : '🚪'}</Text>
+                    <Text
+                      style={[styles.classChipText, isSelected && styles.darjaChipTextActive]}
+                    >
+                      {opt.label}
+                      {opt.count !== undefined ? ` (${opt.count})` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
       )}
 
@@ -1487,7 +1455,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                 <Text style={styles.emptyEmoji}>📋</Text>
                 <Text style={styles.emptyTitle}>No Students in this Filter</Text>
                 <Text style={styles.emptySub}>
-                  Try selecting "All Darjat" or clearing the search box.
+                  Try selecting "All Darjat" / "All Classes" or clearing the search box.
                 </Text>
               </View>
             }
@@ -1539,7 +1507,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                     style={[
                       styles.historySegmentText,
                       historyViewMode === 'sessions' &&
-                        styles.historySegmentTextActive,
+                      styles.historySegmentTextActive,
                     ]}
                   >
                     📅 Date-wise Summary ({dailySessionsHistory.length})
@@ -1557,7 +1525,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                     style={[
                       styles.historySegmentText,
                       historyViewMode === 'records' &&
-                        styles.historySegmentTextActive,
+                      styles.historySegmentTextActive,
                     ]}
                   >
                     👤 Student Logs ({flattenedHistoryRecords.length})
@@ -1607,10 +1575,10 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                           {st === 'All'
                             ? 'All Statuses'
                             : st === 'Present'
-                            ? '● Present'
-                            : st === 'Absent'
-                            ? '● Absent'
-                            : '● Leave'}
+                              ? '● Present'
+                              : st === 'Absent'
+                                ? '● Absent'
+                                : '● Leave'}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1644,8 +1612,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                         item.percentage >= 85
                           ? styles.pctGood
                           : item.percentage >= 75
-                          ? styles.pctWarn
-                          : styles.pctLow,
+                            ? styles.pctWarn
+                            : styles.pctLow,
                       ]}
                     >
                       <Text style={styles.sessionPctText}>
@@ -1726,8 +1694,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                       item.status === 'Present'
                         ? styles.pillPresent
                         : item.status === 'Absent'
-                        ? styles.pillAbsent
-                        : styles.pillLeave,
+                          ? styles.pillAbsent
+                          : styles.pillLeave,
                     ]}
                   >
                     <Text
@@ -1736,15 +1704,15 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                         item.status === 'Present'
                           ? { color: '#15803D' }
                           : item.status === 'Absent'
-                          ? { color: '#DC2626' }
-                          : { color: '#B45309' },
+                            ? { color: '#DC2626' }
+                            : { color: '#B45309' },
                       ]}
                     >
                       {item.status === 'Present'
                         ? 'Present • حاضر'
                         : item.status === 'Absent'
-                        ? 'Absent • غیر حاضر'
-                        : 'Leave • رخصت'}
+                          ? 'Absent • غیر حاضر'
+                          : 'Leave • رخصت'}
                     </Text>
                   </View>
                 </View>
@@ -1870,8 +1838,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                             d.percentage >= 85
                               ? '#059669'
                               : d.percentage >= 75
-                              ? '#D97706'
-                              : '#DC2626',
+                                ? '#D97706'
+                                : '#DC2626',
                         },
                       ]}
                     />
@@ -1927,8 +1895,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                         isGood
                           ? styles.pctGood
                           : isWarn
-                          ? styles.pctWarn
-                          : styles.pctLow,
+                            ? styles.pctWarn
+                            : styles.pctLow,
                       ]}
                     >
                       <Text style={styles.monthlyPctCircleText}>
@@ -1999,8 +1967,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                             rec.status === 'Present'
                               ? styles.pillPresent
                               : rec.status === 'Absent'
-                              ? styles.pillAbsent
-                              : styles.pillLeave,
+                                ? styles.pillAbsent
+                                : styles.pillLeave,
                           ]}
                         >
                           <Text
@@ -2009,8 +1977,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                               rec.status === 'Present'
                                 ? { color: '#15803D' }
                                 : rec.status === 'Absent'
-                                ? { color: '#DC2626' }
-                                : { color: '#B45309' },
+                                  ? { color: '#DC2626' }
+                                  : { color: '#B45309' },
                             ]}
                           >
                             {rec.status}
@@ -2152,8 +2120,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                           mItem.percentage >= 85
                             ? '#059669'
                             : mItem.percentage >= 75
-                            ? '#D97706'
-                            : '#DC2626',
+                              ? '#D97706'
+                              : '#DC2626',
                       },
                     ]}
                   />
@@ -2208,8 +2176,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                       isGood
                         ? styles.pctGood
                         : isWarn
-                        ? styles.pctWarn
-                        : styles.pctLow,
+                          ? styles.pctWarn
+                          : styles.pctLow,
                     ]}
                   >
                     <Text style={styles.monthlyPctCircleText}>
@@ -2387,7 +2355,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                   style={[
                     styles.historySegmentText,
                     detailModalMode === 'monthly' &&
-                      styles.historySegmentTextActive,
+                    styles.historySegmentTextActive,
                   ]}
                 >
                   📊 Monthly ({formatShortMonthLabel(selectedMonth)})
@@ -2405,7 +2373,7 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                   style={[
                     styles.historySegmentText,
                     detailModalMode === 'yearly' &&
-                      styles.historySegmentTextActive,
+                    styles.historySegmentTextActive,
                   ]}
                 >
                   📆 Yearly ({selectedYear})
@@ -2480,8 +2448,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                           rec.status === 'Present'
                             ? styles.pillPresent
                             : rec.status === 'Absent'
-                            ? styles.pillAbsent
-                            : styles.pillLeave,
+                              ? styles.pillAbsent
+                              : styles.pillLeave,
                         ]}
                       >
                         <Text
@@ -2490,8 +2458,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                             rec.status === 'Present'
                               ? { color: '#15803D' }
                               : rec.status === 'Absent'
-                              ? { color: '#DC2626' }
-                              : { color: '#B45309' },
+                                ? { color: '#DC2626' }
+                                : { color: '#B45309' },
                           ]}
                         >
                           {rec.status}
@@ -2567,8 +2535,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                           mb.percentage >= 85
                             ? styles.pillPresent
                             : mb.percentage >= 75
-                            ? styles.pillLeave
-                            : styles.pillAbsent,
+                              ? styles.pillLeave
+                              : styles.pillAbsent,
                         ]}
                       >
                         <Text
@@ -2577,8 +2545,8 @@ export const AttendanceScreen: React.FC<Props> = ({ navigation, route }) => {
                             mb.percentage >= 85
                               ? { color: '#15803D' }
                               : mb.percentage >= 75
-                              ? { color: '#B45309' }
-                              : { color: '#DC2626' },
+                                ? { color: '#B45309' }
+                                : { color: '#DC2626' },
                           ]}
                         >
                           {mb.percentage}%
@@ -2770,6 +2738,38 @@ const styles = StyleSheet.create({
   darjaChipTextActive: {
     color: '#FFFFFF',
   },
+  classScrollContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    alignItems: 'center',
+  },
+  classFilterLabel: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginRight: 8,
+  },
+  classChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  classChipActive: {
+    backgroundColor: '#1E3A8A',
+    borderColor: '#D4AF37',
+  },
+  classChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E3A8A',
+  },
   loaderBox: {
     flex: 1,
     alignItems: 'center',
@@ -2908,7 +2908,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bulkLabel: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     color: '#64748B',
     marginRight: 4,
@@ -2922,7 +2922,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   bulkPresentText: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     color: '#15803D',
   },
@@ -2935,7 +2935,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   bulkAbsentText: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     color: '#DC2626',
   },

@@ -28,6 +28,7 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
   const [gender, setGender] = useState<'Male' | 'Female'>('Male');
   const [bFormNo, setBFormNo] = useState('');
   const [dob, setDob] = useState('2014-05-10');
+  const [studentPin, setStudentPin] = useState('1234');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
 
   // Parent Details
@@ -35,7 +36,7 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
   const [parentPhone, setParentPhone] = useState('');
   const [parentCnic, setParentCnic] = useState('');
   const [parentAddress, setParentAddress] = useState('');
-  const [parentPassword, setParentPassword] = useState('password123');
+  const [parentPin, setParentPin] = useState('1234');
 
   // Classes list & loading
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -92,20 +93,6 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleDemoFill = () => {
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    setFullName(`Muhammad Talha ${rand}`);
-    setFatherName(`Hafiz Tariq Mahmood`);
-    setGender('Male');
-    setBFormNo(`42101-${rand}567-1`);
-    setDob('2013-08-15');
-    setParentName('Hafiz Tariq Mahmood');
-    setParentPhone(`0300-${rand}55`);
-    setParentCnic(`42101-${rand}567-1`);
-    setParentAddress('House 45, Street 12, Gulshan-e-Iqbal, Karachi');
-    setParentPassword('password123');
-  };
-
   const handleSubmit = async () => {
     if (!fullName.trim()) {
       Alert.alert('Required Field', 'Please enter student full name.');
@@ -119,6 +106,13 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
       Alert.alert('Class Required', 'Please assign a class / darja to the student.');
       return;
     }
+
+    const cleanStudentPin = studentPin.trim();
+    if (!/^\d{4}$/.test(cleanStudentPin)) {
+      Alert.alert('Invalid Student PIN', 'Student PIN must be exactly 4 numeric digits (e.g. 1234).');
+      return;
+    }
+
     const cleanPhone = parentPhone.replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length < 10) {
       Alert.alert('Invalid Phone', 'Please enter a valid 11-digit guardian mobile number.');
@@ -127,6 +121,12 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
     const cleanCnic = parentCnic.replace(/\D/g, '');
     if (!cleanCnic || cleanCnic.length < 13) {
       Alert.alert('Invalid CNIC', 'Please enter a valid 13-digit guardian CNIC.');
+      return;
+    }
+
+    const cleanParentPin = parentPin.trim();
+    if (!/^\d{4}$/.test(cleanParentPin)) {
+      Alert.alert('Invalid Guardian PIN', 'Guardian PIN must be exactly 4 numeric digits (e.g. 1234).');
       return;
     }
 
@@ -140,17 +140,19 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
         bFormNo: bFormNo.trim() || undefined,
         classId: selectedClassId,
         status: 'Enrolled',
+        pin: cleanStudentPin,
         parentName: (parentName.trim() || fatherName.trim()),
         parentPhone: parentPhone.trim(),
         parentCnic: parentCnic.trim(),
         parentAddress: parentAddress.trim() || undefined,
-        parentPassword: parentPassword.trim() || 'password123',
+        parentPin: cleanParentPin,
+        parentPassword: cleanParentPin,
       });
 
       if (res.success && res.student) {
         Alert.alert(
           'Student Enrolled Successfully!',
-          `Roll Number: ${res.student.rollNo || 'MMS-2026'}\n\nParent Portal Credentials:\nPhone: ${parentPhone}\nPassword: ${parentPassword}\n\nPlease note down credentials for parent portal login.`,
+          `Roll Number: ${res.student.rollNo || 'MMS-2026'}\n\nStudent Login Credentials:\nCNIC / B-Form: ${bFormNo.trim() || 'Registered'}\n4-Digit PIN: ${cleanStudentPin}\n\nGuardian Login Credentials:\nPhone: ${parentPhone.trim()}\n4-Digit PIN: ${cleanParentPin}\n\nPlease note down these 4-digit PINs for sign in.`,
           [{ text: 'View Students List', onPress: () => navigation.goBack() }]
         );
       } else {
@@ -180,10 +182,6 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.headerTitle}>New Student Admission</Text>
           <Text style={styles.headerSubtitle}>طالب علم کا باقاعدہ داخلہ</Text>
         </View>
-
-        <TouchableOpacity style={styles.prefillBtn} onPress={handleDemoFill}>
-          <Text style={styles.prefillBtnText}>⚡ Demo Fill</Text>
-        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -269,6 +267,23 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
                   onChangeText={setDob}
                 />
               </View>
+            </View>
+
+            {/* Student 4-Digit Login PIN */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Student 4-Digit Login PIN (طالب علم پن) <Text style={styles.req}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="1234"
+                placeholderTextColor="#94a3b8"
+                keyboardType="numeric"
+                maxLength={4}
+                value={studentPin}
+                onChangeText={setStudentPin}
+              />
+              <Text style={styles.hint}>Student will use their CNIC/B-Form and this 4-digit PIN to sign in</Text>
             </View>
 
             {/* Class Assignment */}
@@ -362,15 +377,19 @@ export const StudentAddScreen: React.FC<Props> = ({ navigation }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Initial Portal Password</Text>
+              <Text style={styles.label}>
+                Guardian 4-Digit PIN (سرپرست پن) <Text style={styles.req}>*</Text>
+              </Text>
               <TextInput
                 style={styles.input}
-                placeholder="password123"
+                placeholder="1234"
                 placeholderTextColor="#94a3b8"
-                value={parentPassword}
-                onChangeText={setParentPassword}
+                keyboardType="numeric"
+                maxLength={4}
+                value={parentPin}
+                onChangeText={setParentPin}
               />
-              <Text style={styles.hint}>Guardian will use this password to access the MMS Parent App</Text>
+              <Text style={styles.hint}>Guardian will use their mobile number and this 4-digit PIN to sign in</Text>
             </View>
           </View>
 
