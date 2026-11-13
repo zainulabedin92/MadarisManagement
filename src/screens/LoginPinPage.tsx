@@ -126,7 +126,7 @@ export const LoginPinPage: React.FC<Props> = ({ navigation }) => {
           (res.student
             ? `${res.student.firstName || ''} ${res.student.lastName || ''}`.trim()
             : '') ||
-          (isSuperAdmin ? 'Hazrat Maulana Muhtamim Sahib' : 'Talib-e-Ilm');
+          (isSuperAdmin ? 'Abdullah Zia' : 'Talib-e-Ilm');
 
         // Direct navigation when matched in the `users` table as SuperAdmin / Admin
         if (isSuperAdmin) {

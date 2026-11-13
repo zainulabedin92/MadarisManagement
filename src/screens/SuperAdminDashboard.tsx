@@ -29,7 +29,7 @@ const CARD_WIDTH = (width - 32 - 12) / 2;
 
 export const SuperAdminDashboard: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const userName = route?.params?.userName || 'Hazrat Maulana Muhtamim Sahib';
+  const userName = route?.params?.userName || 'Abdullah Zia';
 
   const [studentsList, setStudentsList] = useState<Student[]>([]);
   const [teachersList, setTeachersList] = useState<Teacher[]>([]);
